@@ -41,7 +41,7 @@ function PairDevice() {
       <h1 className="mb-6 text-2xl font-semibold">Pair a TV</h1>
       <form onSubmit={onPair} className="space-y-4">
         <input
-          className="w-full rounded-md border border-neutral-300 px-3 py-2 tracking-widest"
+          className="w-full rounded-md border border-input bg-background px-3 py-2 tracking-widest text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           placeholder="6-digit code from the TV"
           value={pairingCode}
           inputMode="numeric"
@@ -49,7 +49,7 @@ function PairDevice() {
           onChange={(e) => setPairingCode(e.target.value.replace(/\D/g, ""))}
         />
         <select
-          className="w-full rounded-md border border-neutral-300 px-3 py-2"
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           value={screenId}
           onChange={(e) => setScreenId(e.target.value)}
         >
@@ -61,13 +61,13 @@ function PairDevice() {
           ))}
         </select>
         <button
-          className="w-full rounded-md bg-neutral-900 px-3 py-2 text-white disabled:opacity-50"
+          className="w-full rounded-md bg-primary px-3 py-2 text-primary-foreground disabled:opacity-50"
           disabled={pairingCode.length !== 6 || !screenId}
           type="submit"
         >
           Pair device
         </button>
-        {msg && <p className="text-sm text-neutral-700">{msg}</p>}
+        {msg && <p className="text-sm text-muted-foreground">{msg}</p>}
       </form>
     </main>
   );

@@ -1,22 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-
-const input =
-  "w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900";
+import { AuthPanel } from "@/components/ui/sign-in";
 
 export default function SignInPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function onSubmit({ email, password }: { email: string; password: string }) {
     setError(null);
     setBusy(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -26,41 +20,17 @@ export default function SignInPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-6">
-      <form
-        onSubmit={onSubmit}
-        className="w-full max-w-sm space-y-4 rounded-xl border border-neutral-200 bg-white p-6 shadow-sm"
-      >
-        <h1 className="text-xl font-semibold">ImliPos — Owner sign in</h1>
-        <input
-          className={input}
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <input
-          className={input}
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <button
-          className="w-full rounded-md bg-neutral-900 px-3 py-2 text-white disabled:opacity-50"
-          type="submit"
-          disabled={busy}
-        >
-          {busy ? "Signing in…" : "Sign in"}
-        </button>
-        <p className="text-center text-sm text-neutral-500">
-          New here?{" "}
-          <Link href="/signup" className="font-medium text-neutral-900 underline">
-            Create an account
-          </Link>
-        </p>
-      </form>
-    </main>
+    <AuthPanel
+      title={<span className="font-light tracking-tighter">Welcome back</span>}
+      description="Sign in to manage your menus and screens."
+      heroVideoSrc="/auth-hero.mp4"
+      submitLabel="Sign in"
+      busy={busy}
+      error={error}
+      footerPrompt="New to ImliPos?"
+      footerActionLabel="Create an account"
+      onFooterAction={() => router.push("/signup")}
+      onSubmit={onSubmit}
+    />
   );
 }

@@ -17,7 +17,7 @@ export default function DashboardPage() {
 }
 
 const input =
-  "rounded-md border border-neutral-300 bg-white px-3 py-2 text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900";
+  "rounded-md border border-input bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring";
 
 function Dashboard() {
   const router = useRouter();
@@ -59,13 +59,13 @@ function Dashboard() {
       <header className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Menu</h1>
         <div className="flex items-center gap-4 text-sm">
-          <Link href="/screens" className="font-medium text-neutral-900 underline">
+          <Link href="/screens" className="font-medium text-foreground underline">
             Screens
           </Link>
-          <Link href="/screens/pair" className="font-medium text-neutral-900 underline">
+          <Link href="/screens/pair" className="font-medium text-foreground underline">
             Pair a TV
           </Link>
-          <button onClick={signOut} className="text-neutral-500 hover:text-neutral-900">
+          <button onClick={signOut} className="text-muted-foreground hover:text-foreground">
             Sign out
           </button>
         </div>
@@ -81,7 +81,7 @@ function Dashboard() {
         />
         <button
           type="submit"
-          className="rounded-md bg-neutral-900 px-4 py-2 text-white disabled:opacity-50"
+          className="rounded-md bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
           disabled={!newCat.trim()}
         >
           Add category
@@ -89,9 +89,9 @@ function Dashboard() {
       </form>
 
       {loading ? (
-        <p className="text-neutral-500">Loading…</p>
+        <p className="text-muted-foreground">Loading…</p>
       ) : categories.length === 0 ? (
-        <p className="text-neutral-500">No categories yet. Add one above to start.</p>
+        <p className="text-muted-foreground">No categories yet. Add one above to start.</p>
       ) : (
         categories.map((cat) => (
           <CategorySection
@@ -109,7 +109,7 @@ function Dashboard() {
         ))
       )}
 
-      <p className="mt-8 text-sm text-neutral-500">
+      <p className="mt-8 text-sm text-muted-foreground">
         Toggling “Sold out” pushes live to every TV showing this item. Assign categories
         to a screen under <Link href="/screens" className="underline">Screens</Link>.
       </p>
@@ -172,20 +172,20 @@ function CategorySection({
         <span>
           {category.name}{" "}
           {!category.isAvailable && (
-            <span className="text-sm text-red-600">(category off)</span>
+            <span className="text-sm text-red-400">(category off)</span>
           )}
         </span>
         <button
           onClick={deleteCategory}
-          className="text-sm font-normal text-red-600 hover:text-red-800"
+          className="text-sm font-normal text-red-400 hover:text-red-300"
         >
           Delete category
         </button>
       </h2>
-      <ul className="divide-y divide-neutral-200 rounded-lg border border-neutral-200 bg-white">
+      <ul className="divide-y divide-border rounded-lg border border-border bg-card">
         {items.map((it) => (
           <li key={it.id} className="flex items-center justify-between px-4 py-3">
-            <span className={it.isAvailable ? "" : "text-neutral-400 line-through"}>
+            <span className={it.isAvailable ? "" : "text-muted-foreground line-through"}>
               {it.name} — ₹{it.price}
             </span>
             <div className="flex items-center gap-3">
@@ -193,15 +193,15 @@ function CategorySection({
                 onClick={() => onToggle(it)}
                 className={`rounded-md px-3 py-1 text-sm ${
                   it.isAvailable
-                    ? "bg-green-100 text-green-800"
-                    : "bg-red-100 text-red-800"
+                    ? "bg-green-500/15 text-green-300"
+                    : "bg-red-500/15 text-red-300"
                 }`}
               >
                 {it.isAvailable ? "Available" : "Sold out"}
               </button>
               <button
                 onClick={() => deleteItem(it)}
-                className="text-sm text-neutral-400 hover:text-red-600"
+                className="text-sm text-muted-foreground hover:text-red-400"
                 aria-label={`Delete ${it.name}`}
               >
                 ✕
@@ -210,7 +210,7 @@ function CategorySection({
           </li>
         ))}
         {items.length === 0 && (
-          <li className="px-4 py-3 text-sm text-neutral-400">No items yet.</li>
+          <li className="px-4 py-3 text-sm text-muted-foreground">No items yet.</li>
         )}
       </ul>
       <form onSubmit={addItem} className="mt-2 flex gap-2">
@@ -229,7 +229,7 @@ function CategorySection({
         />
         <button
           type="submit"
-          className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm disabled:opacity-50"
+          className="rounded-md border border-input bg-background px-4 py-2 text-sm disabled:opacity-50"
           disabled={!name.trim() || price.trim() === ""}
         >
           Add item

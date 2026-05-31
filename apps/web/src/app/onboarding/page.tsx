@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { api } from "@/lib/api";
 
 const input =
-  "w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900";
+  "w-full rounded-md border border-input bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring";
 
 /** One-field onboarding: name your shop. Runs once, right after sign-up. */
 export default function OnboardingPage() {
@@ -42,10 +42,10 @@ export default function OnboardingPage() {
     <main className="flex min-h-screen items-center justify-center p-6">
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-sm space-y-4 rounded-xl border border-neutral-200 bg-white p-6 shadow-sm"
+        className="w-full max-w-sm space-y-4 rounded-xl border border-border bg-card p-6 shadow-sm"
       >
         <h1 className="text-xl font-semibold">Name your shop</h1>
-        <p className="text-sm text-neutral-500">
+        <p className="text-sm text-muted-foreground">
           This is the cafe/shop you’ll manage menus for.
         </p>
         <input
@@ -54,9 +54,9 @@ export default function OnboardingPage() {
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-red-400">{error}</p>}
         <button
-          className="w-full rounded-md bg-neutral-900 px-3 py-2 text-white disabled:opacity-50"
+          className="w-full rounded-md bg-primary px-3 py-2 text-primary-foreground disabled:opacity-50"
           type="submit"
           disabled={busy || name.trim().length === 0}
         >

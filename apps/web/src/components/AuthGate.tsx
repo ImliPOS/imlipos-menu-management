@@ -33,6 +33,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
     };
   }, [router]);
 
-  if (!ok) return <main className="p-8 text-neutral-500">Loading…</main>;
+  if (!ok) return <main className="p-8 text-muted-foreground">Loading…</main>;
   return <>{children}</>;
 }

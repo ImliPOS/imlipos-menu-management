@@ -10,5 +10,5 @@ export default function Home() {
       router.replace(data.session ? "/dashboard" : "/signin");
     });
   }, [router]);
-  return <main className="p-8 text-neutral-500">Loading…</main>;
+  return <main className="p-8 text-muted-foreground">Loading…</main>;
 }

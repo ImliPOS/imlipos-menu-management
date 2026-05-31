@@ -15,7 +15,7 @@ export default function ScreensPage() {
 }
 
 const input =
-  "w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900";
+  "w-full rounded-md border border-input bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring";
 
 function Screens() {
   const [screens, setScreens] = useState<Screen[]>([]);
@@ -54,10 +54,10 @@ function Screens() {
       <header className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Screens</h1>
         <div className="flex gap-4 text-sm">
-          <Link href="/dashboard" className="text-neutral-500 hover:text-neutral-900">
+          <Link href="/dashboard" className="text-muted-foreground hover:text-foreground">
             Menu
           </Link>
-          <Link href="/screens/pair" className="font-medium text-neutral-900 underline">
+          <Link href="/screens/pair" className="font-medium text-foreground underline">
             Pair a TV
           </Link>
         </div>
@@ -65,7 +65,7 @@ function Screens() {
 
       <form
         onSubmit={onCreate}
-        className="mb-8 space-y-3 rounded-xl border border-neutral-200 bg-white p-5"
+        className="mb-8 space-y-3 rounded-xl border border-border bg-card p-5"
       >
         <h2 className="font-medium">Add a screen</h2>
         <input
@@ -82,9 +82,9 @@ function Screens() {
           <option value="landscape">Landscape</option>
           <option value="portrait">Portrait</option>
         </select>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-red-400">{error}</p>}
         <button
-          className="rounded-md bg-neutral-900 px-4 py-2 text-white disabled:opacity-50"
+          className="rounded-md bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
           type="submit"
           disabled={busy || name.trim().length === 0}
         >
@@ -94,7 +94,7 @@ function Screens() {
 
       <h2 className="mb-2 font-medium">Your screens</h2>
       {screens.length === 0 ? (
-        <p className="text-sm text-neutral-500">
+        <p className="text-sm text-muted-foreground">
           No screens yet. Add one above, then pair a TV to it.
         </p>
       ) : (
@@ -150,23 +150,23 @@ function ScreenCard({
   }
 
   return (
-    <div className="rounded-lg border border-neutral-200 bg-white">
+    <div className="rounded-lg border border-border bg-card">
       <div className="flex items-center justify-between px-4 py-3">
         <span>
           {screen.name}{" "}
-          <span className="text-sm text-neutral-400">({screen.orientation})</span>
+          <span className="text-sm text-muted-foreground">({screen.orientation})</span>
         </span>
-        <button onClick={openPanel} className="text-sm text-neutral-900 underline">
+        <button onClick={openPanel} className="text-sm text-foreground underline">
           {open ? "Close" : "Content"}
         </button>
       </div>
       {open && (
-        <div className="border-t border-neutral-200 px-4 py-3">
-          <p className="mb-2 text-sm text-neutral-500">
+        <div className="border-t border-border px-4 py-3">
+          <p className="mb-2 text-sm text-muted-foreground">
             Pick which categories show on this screen:
           </p>
           {categories.length === 0 ? (
-            <p className="text-sm text-neutral-400">
+            <p className="text-sm text-muted-foreground">
               No categories yet — add some on the Menu page first.
             </p>
           ) : (
@@ -188,11 +188,11 @@ function ScreenCard({
           <button
             onClick={save}
             disabled={busy}
-            className="rounded-md bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-50"
+            className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
           >
             {busy ? "Saving…" : "Save"}
           </button>
-          {saved && <span className="ml-3 text-sm text-green-700">Saved ✓</span>}
+          {saved && <span className="ml-3 text-sm text-green-400">Saved ✓</span>}
         </div>
       )}
     </div>
