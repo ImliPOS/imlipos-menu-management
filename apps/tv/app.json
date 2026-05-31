@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "ImliPos TV",
+    "slug": "imlipos-tv",
+    "version": "1.0.0",
+    "platforms": ["android"],
+    "android": { "package": "com.imlipos.tv" },
+    "plugins": [
+      ["@react-native-tvos/config-tv", { "isTV": true, "tvImagesDir": "./assets" }]
+    ]
+  }
+}

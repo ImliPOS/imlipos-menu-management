@@ -1,0 +1,36 @@
+{
+  "name": "@imlipos/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "@imlipos/contracts": "workspace:*",
+    "@supabase/supabase-js": "^2.45.4",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.33.0",
+    "express": "^4.21.0",
+    "jose": "^5.9.3",
+    "postgres": "^3.4.4",
+    "socket.io": "^4.8.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.7.4",
+    "drizzle-kit": "^0.24.2",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2"
+  }
+}
