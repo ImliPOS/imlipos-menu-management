@@ -8,7 +8,6 @@ import {
   BookOpen,
   MonitorPlay,
   QrCode,
-  Settings,
   User,
   LogOut,
   PanelLeft,
@@ -52,7 +51,6 @@ const TITLES: Record<string, string> = {
   "/menu": "Menu",
   "/screens": "Screens",
   "/screens/pair": "Pair a TV",
-  "/settings": "Settings",
   "/profile": "Profile",
 };
 
@@ -188,7 +186,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-/** Footer account button that opens a dropdown (Profile, Settings, Log out). */
+/** Footer account button that opens a dropdown (Profile, Log out). */
 function UserMenu({ email, collapsed }: { email: string; collapsed: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -245,9 +243,6 @@ function UserMenu({ email, collapsed }: { email: string; collapsed: boolean }) {
           <div className="py-1">
             <MenuLink href="/profile" icon={User} onClick={() => setOpen(false)}>
               Profile
-            </MenuLink>
-            <MenuLink href="/settings" icon={Settings} onClick={() => setOpen(false)}>
-              Settings
             </MenuLink>
           </div>
           <div className="border-t border-border py-1">

@@ -106,7 +106,7 @@ export default function Categories() {
 
       <p className="mt-8 text-sm text-muted-foreground">
         Add items to these categories under <span className="text-foreground">Menu</span>.
-        “Hidden” removes the whole category from every TV showing it.
+        Toggle removes the whole category from every TV showing it.
       </p>
     </div>
   );

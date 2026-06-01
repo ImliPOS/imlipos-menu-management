@@ -70,21 +70,21 @@ export function MenuScreen({
     <View style={styles.root}>
       {!online && <View style={styles.offline}><Text style={styles.offlineText}>OFFLINE — showing last menu</Text></View>}
       <FlatList
-        data={content.categories.filter((c) => c.isAvailable)}
+        data={content.categories.filter(
+          (c) => c.isAvailable && c.items.some((i) => i.isAvailable),
+        )}
         keyExtractor={(c) => c.id}
         renderItem={({ item: cat }) => (
           <View style={styles.category}>
             <Text style={styles.catTitle}>{cat.name}</Text>
-            {cat.items.map((it) => (
-              <View key={it.id} style={styles.row}>
-                <Text style={[styles.item, !it.isAvailable && styles.soldOut]}>
-                  {it.name}
-                </Text>
-                <Text style={[styles.price, !it.isAvailable && styles.soldOut]}>
-                  {it.isAvailable ? `₹${it.price}` : "SOLD OUT"}
-                </Text>
-              </View>
-            ))}
+            {cat.items
+              .filter((it) => it.isAvailable)
+              .map((it) => (
+                <View key={it.id} style={styles.row}>
+                  <Text style={styles.item}>{it.name}</Text>
+                  <Text style={styles.price}>₹{it.price}</Text>
+                </View>
+              ))}
           </View>
         )}
       />
