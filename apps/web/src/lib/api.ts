@@ -53,6 +53,7 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ name }),
     }),
+  deleteAccount: () => call<void>("/shops/account", { method: "DELETE" }),
   // menu
   listCategories: () => call<Category[]>("/categories"),
   createCategory: (b: CreateCategoryInput) =>

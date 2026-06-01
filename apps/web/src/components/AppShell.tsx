@@ -17,6 +17,16 @@ import {
   ChevronsUpDown,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type NavItem = { href: string; label: string; icon: React.ElementType };
 
@@ -182,6 +192,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 function UserMenu({ email, collapsed }: { email: string; collapsed: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [logoutOpen, setLogoutOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const initial = email ? email[0]?.toUpperCase() : "?";
 
@@ -241,7 +252,10 @@ function UserMenu({ email, collapsed }: { email: string; collapsed: boolean }) {
           </div>
           <div className="border-t border-border py-1">
             <button
-              onClick={signOut}
+              onClick={() => {
+                setOpen(false);
+                setLogoutOpen(true);
+              }}
               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
             >
               <LogOut className="h-4 w-4" />
@@ -250,6 +264,23 @@ function UserMenu({ email, collapsed }: { email: string; collapsed: boolean }) {
           </div>
         </div>
       )}
+
+      {/* Controlled + always mounted, so closing the dropdown can't unmount it. */}
+      <AlertDialog open={logoutOpen} onOpenChange={setLogoutOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Log out of ImliPos?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You’ll be signed out of the admin. Your menus and screens keep
+              running on your TVs. You can sign back in anytime.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={signOut}>Log out</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

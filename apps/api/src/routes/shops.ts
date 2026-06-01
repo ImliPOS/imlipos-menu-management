@@ -3,10 +3,23 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, schema } from "../db/client.js";
 import { requireAuth } from "../middleware/auth.js";
+import { supabaseAdmin } from "../lib/supabase.js";
 
 const { shops } = schema;
 export const shopsRouter = Router();
 shopsRouter.use(requireAuth);
+
+/**
+ * Permanently delete the owner's account: removes the shop (cascades to
+ * categories/items/screens/devices) and the Supabase auth user.
+ */
+shopsRouter.delete("/account", async (req, res) => {
+  const userId = req.auth!.userId;
+  await db.delete(shops).where(eq(shops.ownerId, userId));
+  const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true });
+});
 
 /** Who am I + do I have a shop yet? Drives the onboarding redirect. */
 shopsRouter.get("/me", async (req, res) => {
