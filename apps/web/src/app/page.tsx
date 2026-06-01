@@ -2,13 +2,14 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { PageSpinner } from "@/components/ui/spinner";
 
 export default function Home() {
   const router = useRouter();
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      router.replace(data.session ? "/dashboard" : "/signin");
+      router.replace(data.session ? "/menu" : "/signin");
     });
   }, [router]);
-  return <main className="p-8 text-muted-foreground">Loading…</main>;
+  return <PageSpinner />;
 }

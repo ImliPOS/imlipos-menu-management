@@ -16,7 +16,7 @@ export default function SignInPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
     if (error) setError(error.message);
-    else router.replace("/dashboard");
+    else router.replace("/menu");
   }
 
   return (

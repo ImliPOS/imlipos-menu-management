@@ -23,6 +23,20 @@ shopsRouter.get("/me", async (req, res) => {
 });
 
 const createShopSchema = z.object({ name: z.string().min(1).max(120) });
+const updateShopSchema = z.object({ name: z.string().min(1).max(120) });
+
+/** Rename the owner's shop. */
+shopsRouter.patch("/", async (req, res) => {
+  const parsed = updateShopSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json(parsed.error.flatten());
+  const [row] = await db
+    .update(shops)
+    .set({ name: parsed.data.name })
+    .where(eq(shops.ownerId, req.auth!.userId))
+    .returning();
+  if (!row) return res.status(404).json({ error: "No shop" });
+  res.json(row);
+});
 
 /** Create the owner's shop (one per owner for the MVP). */
 shopsRouter.post("/", async (req, res) => {

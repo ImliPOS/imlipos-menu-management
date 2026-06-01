@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { api } from "@/lib/api";
+import { PageSpinner } from "@/components/ui/spinner";
 
 /**
  * Wraps protected pages. Ensures: (1) a Supabase session exists, else → /signin;
@@ -33,6 +34,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
     };
   }, [router]);
 
-  if (!ok) return <main className="p-8 text-muted-foreground">Loading…</main>;
+  if (!ok) return <PageSpinner />;
   return <>{children}</>;
 }

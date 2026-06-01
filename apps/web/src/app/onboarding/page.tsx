@@ -21,7 +21,7 @@ export default function OnboardingPage() {
       const { data } = await supabase.auth.getSession();
       if (!data.session) return router.replace("/signin");
       const me = await api.me().catch(() => null);
-      if (me?.shop) router.replace("/dashboard");
+      if (me?.shop) router.replace("/menu");
     })();
   }, [router]);
 
@@ -31,7 +31,7 @@ export default function OnboardingPage() {
     setError(null);
     try {
       await api.createShop(name.trim());
-      router.replace("/dashboard");
+      router.replace("/menu");
     } catch (err) {
       setError((err as Error).message);
       setBusy(false);

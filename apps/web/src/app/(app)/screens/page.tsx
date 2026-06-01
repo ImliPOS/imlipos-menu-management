@@ -1,23 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import type { Category, Orientation, Screen } from "@imlipos/contracts";
 import { api } from "@/lib/api";
-import { AuthGate } from "@/components/AuthGate";
-
-export default function ScreensPage() {
-  return (
-    <AuthGate>
-      <Screens />
-    </AuthGate>
-  );
-}
 
 const input =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring";
 
-function Screens() {
+export default function Screens() {
   const [screens, setScreens] = useState<Screen[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [name, setName] = useState("");
@@ -50,19 +40,7 @@ function Screens() {
   }
 
   return (
-    <main className="mx-auto max-w-2xl p-8">
-      <header className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Screens</h1>
-        <div className="flex gap-4 text-sm">
-          <Link href="/dashboard" className="text-muted-foreground hover:text-foreground">
-            Menu
-          </Link>
-          <Link href="/screens/pair" className="font-medium text-foreground underline">
-            Pair a TV
-          </Link>
-        </div>
-      </header>
-
+    <div className="mx-auto max-w-2xl p-8">
       <form
         onSubmit={onCreate}
         className="mb-8 space-y-3 rounded-xl border border-border bg-card p-5"
@@ -104,7 +82,7 @@ function Screens() {
           ))}
         </div>
       )}
-    </main>
+    </div>
   );
 }
 

@@ -48,6 +48,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ name }),
     }),
+  updateShop: (name: string) =>
+    call<{ id: string; name: string }>("/shops", {
+      method: "PATCH",
+      body: JSON.stringify({ name }),
+    }),
   // menu
   listCategories: () => call<Category[]>("/categories"),
   createCategory: (b: CreateCategoryInput) =>
