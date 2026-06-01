@@ -1,17 +1,35 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PlusIcon, Tags, Trash2Icon } from "lucide-react";
 import type { Category } from "@imlipos/contracts";
 import { api } from "@/lib/api";
 import { PageSpinner } from "@/components/ui/spinner";
-
-const input =
-  "rounded-md border border-input bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 export default function Categories() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newCat, setNewCat] = useState("");
 
   useEffect(() => {
     api
@@ -20,14 +38,6 @@ export default function Categories() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
-
-  async function addCategory(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newCat.trim()) return;
-    const created = await api.createCategory({ name: newCat.trim() });
-    setCategories((p) => [...p, created]);
-    setNewCat("");
-  }
 
   async function toggleCategory(cat: Category) {
     const updated = await api.toggleCategory(cat.id, !cat.isAvailable);
@@ -49,51 +59,49 @@ export default function Categories() {
 
   return (
     <div className="mx-auto max-w-3xl p-8">
-      <form onSubmit={addCategory} className="mb-8 flex gap-2">
-        <input
-          className={`${input} flex-1`}
-          placeholder="New category (e.g. Coffee)"
-          value={newCat}
-          onChange={(e) => setNewCat(e.target.value)}
-        />
-        <button
-          type="submit"
-          className="rounded-md bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
-          disabled={!newCat.trim()}
-        >
-          Add category
-        </button>
-      </form>
+      <div className="mb-6 flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          {categories.length} categor{categories.length === 1 ? "y" : "ies"}
+        </p>
+        <AddCategoryDialog onCreated={(c) => setCategories((p) => [...p, c])} />
+      </div>
 
       {categories.length === 0 ? (
-        <p className="text-muted-foreground">No categories yet. Add one above to start.</p>
+        <p className="text-muted-foreground">
+          No categories yet. Use “Add category” to create your first one.
+        </p>
       ) : (
-        <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+        <div className="space-y-4">
           {categories.map((cat) => (
-            <li key={cat.id} className="flex items-center justify-between px-4 py-3">
-              <span>{cat.name}</span>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => toggleCategory(cat)}
-                  className={`rounded-md px-3 py-1 text-sm ${
-                    cat.isAvailable
-                      ? "bg-green-500/15 text-green-300"
-                      : "bg-red-500/15 text-red-300"
-                  }`}
-                >
-                  {cat.isAvailable ? "Shown" : "Hidden"}
-                </button>
+            <Item key={cat.id} variant="outline">
+              <ItemMedia variant="icon">
+                <Tags />
+              </ItemMedia>
+              <ItemContent>
+                <ItemTitle>{cat.name}</ItemTitle>
+                <ItemDescription>
+                  {cat.isAvailable
+                    ? "Shown on assigned screens"
+                    : "Hidden from all screens"}
+                </ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <Switch
+                  checked={cat.isAvailable}
+                  onCheckedChange={() => toggleCategory(cat)}
+                  aria-label={`Toggle ${cat.name}`}
+                />
                 <button
                   onClick={() => deleteCategory(cat)}
-                  className="text-sm text-muted-foreground hover:text-red-400"
+                  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-red-400"
                   aria-label={`Delete ${cat.name}`}
                 >
-                  ✕
+                  <Trash2Icon className="size-4" />
                 </button>
-              </div>
-            </li>
+              </ItemActions>
+            </Item>
           ))}
-        </ul>
+        </div>
       )}
 
       <p className="mt-8 text-sm text-muted-foreground">
@@ -101,5 +109,68 @@ export default function Categories() {
         “Hidden” removes the whole category from every TV showing it.
       </p>
     </div>
+  );
+}
+
+function AddCategoryDialog({ onCreated }: { onCreated: (c: Category) => void }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setBusy(true);
+    try {
+      const created = await api.createCategory({ name: name.trim() });
+      onCreated(created);
+      setName("");
+      setOpen(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button>
+          <PlusIcon className="size-4" />
+          Add category
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add category</DialogTitle>
+          <DialogDescription>
+            Categories group your menu items (e.g. Coffee, Main Course).
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="mt-2 space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="category-name">Category name</Label>
+            <Input
+              id="category-name"
+              autoFocus
+              placeholder="e.g. Coffee"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={busy || !name.trim()}>
+              {busy ? "Adding…" : "Add category"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
