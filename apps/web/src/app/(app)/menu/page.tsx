@@ -124,7 +124,7 @@ export default function Menu() {
         ))}
 
       <p className="mt-8 text-sm text-muted-foreground">
-        Toggling “Sold out” pushes live to every TV showing this item.
+        Toggling “Sold out” pushes live to every display showing this item.
       </p>
     </div>
   );

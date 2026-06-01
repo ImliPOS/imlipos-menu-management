@@ -59,7 +59,7 @@ export default function Screens() {
 
       {screens.length === 0 ? (
         <p className="text-muted-foreground">
-          No screens yet. Use “Add Screen”, then pair a TV to it.
+          No screens yet. Use “Add Screen”, then pair a display to it.
         </p>
       ) : (
         <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-4">
@@ -111,7 +111,7 @@ function AddScreenDialog({ onCreated }: { onCreated: (s: Screen) => void }) {
         <DialogHeader>
           <DialogTitle>Add a screen</DialogTitle>
           <DialogDescription>
-            A screen is a logical display (e.g. “Counter Left”) you pair a TV to.
+            A screen is a layout (e.g. “Counter Left”) you pair a display to.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="mt-2 space-y-4">
@@ -186,7 +186,7 @@ function ScreenCard({
   }
 
   async function removeDevice(id: string) {
-    if (!confirm("Remove this TV? It will return to the pairing screen.")) return;
+    if (!confirm("Remove this display? It will return to the pairing screen.")) return;
     await api.removeDevice(id);
     setDevices((p) => p.filter((d) => d.id !== id));
   }
@@ -295,31 +295,39 @@ function ScreenCard({
           </div>
 
           <div className="space-y-2">
-            <Label>Paired TVs</Label>
+            <Label>Paired Displays</Label>
             {devices.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No TVs paired to this screen yet.
+                No displays paired to this screen yet.
               </p>
             ) : (
               <ul className="divide-y divide-border rounded-lg border border-border">
                 {devices.map((d) => (
-                  <li key={d.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                    <span className="flex items-center gap-2">
+                  <li key={d.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                    <span className="flex min-w-0 items-center gap-2">
                       <span
-                        className={`h-2 w-2 rounded-full ${
+                        className={`h-2 w-2 shrink-0 rounded-full ${
                           isOnline(d) ? "bg-green-400" : "bg-muted-foreground"
                         }`}
+                        title={isOnline(d) ? "Online" : "Offline"}
                       />
-                      {isOnline(d)
-                        ? "Online"
-                        : d.lastSeenAt
-                          ? `Last seen ${new Date(d.lastSeenAt).toLocaleString()}`
-                          : "Never connected"}
+                      <span className="flex min-w-0 flex-col">
+                        <span className="truncate font-medium text-foreground">
+                          {d.name ?? "Unnamed display"}
+                        </span>
+                        <span className="truncate text-xs text-muted-foreground">
+                          {isOnline(d)
+                            ? "Online"
+                            : d.lastSeenAt
+                              ? `Last seen ${new Date(d.lastSeenAt).toLocaleString()}`
+                              : "Never connected"}
+                        </span>
+                      </span>
                     </span>
                     <button
                       onClick={() => removeDevice(d.id)}
-                      className="text-muted-foreground hover:text-red-400"
-                      aria-label="Remove TV"
+                      className="shrink-0 text-muted-foreground hover:text-red-400"
+                      aria-label="Remove display"
                     >
                       <Trash2Icon className="size-4" />
                     </button>

@@ -15,6 +15,13 @@
       "when": 1780151256986,
       "tag": "0001_wild_sumo",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780304269325,
+      "tag": "0002_lean_falcon",
+      "breakpoints": true
     }
   ]
 }

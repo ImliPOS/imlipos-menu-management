@@ -4,11 +4,12 @@ import { isoDate } from "./menu";
 export const deviceStatus = z.enum(["pending", "active", "revoked"]);
 export type DeviceStatus = z.infer<typeof deviceStatus>;
 
-/** ---- Device (a physical TV) ---- */
+/** ---- Device (a physical display) ---- */
 export const deviceSchema = z.object({
   id: z.string().uuid(),
   shopId: z.string().uuid().nullable(), // null until claimed
   screenId: z.string().uuid().nullable(),
+  name: z.string().nullable(), // owner-given display name, set at pairing
   status: deviceStatus,
   lastSeenAt: isoDate.nullable(),
   createdAt: isoDate,
@@ -39,6 +40,7 @@ export type RegisterDeviceResponse = z.infer<typeof registerDeviceResponse>;
 export const pairDeviceSchema = z.object({
   pairingCode: z.string().regex(/^\d{6}$/),
   screenId: z.string().uuid(),
+  name: z.string().min(1).max(120),
 });
 export type PairDeviceInput = z.infer<typeof pairDeviceSchema>;
 

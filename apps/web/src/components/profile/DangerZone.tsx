@@ -37,7 +37,7 @@ export function DangerZone() {
         <h3 className="font-semibold">Danger Zone</h3>
         <p className="text-sm text-muted-foreground">
           Permanently delete your account. This removes your shop, menus, screens,
-          and paired TVs, and cannot be undone.
+          and paired displays, and cannot be undone.
         </p>
       </div>
 
@@ -66,7 +66,7 @@ export function DangerZone() {
                     <AlertDialogTitle>Delete account permanently?</AlertDialogTitle>
                     <AlertDialogDescription>
                       This deletes your shop, all categories, items, screens, and
-                      paired TVs, plus your login. This cannot be undone.
+                      paired displays, plus your login. This cannot be undone.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>

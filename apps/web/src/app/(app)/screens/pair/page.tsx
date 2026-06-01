@@ -19,6 +19,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const field =
   "h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring";
@@ -58,7 +69,7 @@ export default function PairDevice() {
       {/* Header: live count + Pair Device button */}
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <h2 className="text-lg font-medium">Paired TVs</h2>
+          <h2 className="text-lg font-medium">Paired Displays</h2>
           <span className="rounded-full bg-secondary px-2 py-0.5 text-sm text-muted-foreground">
             {paired.length}
           </span>
@@ -72,12 +83,12 @@ export default function PairDevice() {
 
       {paired.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          No TVs paired yet. Enter a code above to pair one.
+          No displays paired yet. Use “Pair Display” to add one.
         </p>
       ) : (
         <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-4">
           {paired.map((d) => (
-            <TVCard
+            <DisplayCard
               key={d.id}
               device={d}
               screen={d.screenId ? screenById.get(d.screenId) : undefined}
@@ -100,6 +111,7 @@ function PairDeviceDialog({
   const [open, setOpen] = useState(false);
   const [pairingCode, setPairingCode] = useState("");
   const [screenId, setScreenId] = useState("");
+  const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -108,10 +120,11 @@ function PairDeviceDialog({
     setError(null);
     setBusy(true);
     try {
-      await api.pairDevice({ pairingCode, screenId });
+      await api.pairDevice({ pairingCode, screenId, name: name.trim() });
       onPaired();
       setPairingCode("");
       setScreenId("");
+      setName("");
       setOpen(false);
     } catch {
       setError("Invalid or expired code.");
@@ -125,24 +138,34 @@ function PairDeviceDialog({
       <DialogTrigger asChild>
         <Button>
           <PlusIcon className="size-4" />
-          Pair Device
+          Pair Display
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Pair a TV</DialogTitle>
+          <DialogTitle>Pair a Display</DialogTitle>
           <DialogDescription>
-            Enter the 6-digit code shown on the TV and pick the screen it should display.
+            Enter the 6-digit code shown on the display, name it, and pick the screen
+            it should show.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="mt-2 space-y-4">
           <div className="space-y-2">
+            <Label htmlFor="display-name">Display name</Label>
+            <Input
+              id="display-name"
+              autoFocus
+              placeholder="e.g. Counter Display"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="code">Pairing code</Label>
             <Input
               id="code"
-              autoFocus
               className="tracking-widest"
-              placeholder="6-digit code from the TV"
+              placeholder="6-digit code from the display"
               inputMode="numeric"
               maxLength={6}
               value={pairingCode}
@@ -170,8 +193,11 @@ function PairDeviceDialog({
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={busy || pairingCode.length !== 6 || !screenId}>
-              {busy ? "Pairing…" : "Pair device"}
+            <Button
+              type="submit"
+              disabled={busy || pairingCode.length !== 6 || !screenId || !name.trim()}
+            >
+              {busy ? "Pairing…" : "Pair display"}
             </Button>
           </DialogFooter>
         </form>
@@ -180,7 +206,7 @@ function PairDeviceDialog({
   );
 }
 
-function TVCard({
+function DisplayCard({
   device,
   screen,
   onRemoved,
@@ -191,6 +217,9 @@ function TVCard({
 }) {
   const online = isOnline(device);
   const ratio = screen?.orientation === "portrait" ? 9 / 16 : 16 / 9;
+  const label = device.name ?? screen?.name ?? "Display";
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
 
   async function remove() {
     await api.removeDevice(device.id);
@@ -210,7 +239,7 @@ function TVCard({
               />
               <span className="flex flex-col items-center gap-1">
                 <Tv className="size-5 text-muted-foreground" />
-                <span className="font-medium">{screen?.name ?? "Unassigned"}</span>
+                <span className="font-medium">{label}</span>
               </span>
             </div>
           </AspectRatio>
@@ -222,10 +251,11 @@ function TVCard({
 
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>TV details</DialogTitle>
-          <DialogDescription>{screen?.name ?? "Unassigned screen"}</DialogDescription>
+          <DialogTitle>{label}</DialogTitle>
+          <DialogDescription>Display details</DialogDescription>
         </DialogHeader>
         <dl className="mt-2 space-y-3 text-sm">
+          <Row label="Name">{device.name ?? "—"}</Row>
           <Row label="Status">
             <span className="flex items-center gap-2">
               <span className={`h-2 w-2 rounded-full ${online ? "bg-green-400" : "bg-muted-foreground"}`} />
@@ -248,12 +278,46 @@ function TVCard({
           <DialogClose asChild>
             <Button variant="outline">Close</Button>
           </DialogClose>
-          <DialogClose asChild>
-            <Button variant="destructive" onClick={remove}>
-              <Trash2Icon className="size-4" />
-              Remove TV
-            </Button>
-          </DialogClose>
+          <AlertDialog
+            open={confirmOpen}
+            onOpenChange={(o) => {
+              setConfirmOpen(o);
+              if (!o) setConfirmText("");
+            }}
+          >
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive">
+                <Trash2Icon className="size-4" />
+                Remove display
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Remove “{label}”?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This un-pairs the display — it stops showing the menu and returns to
+                  its pairing code. This can’t be undone. Type{" "}
+                  <span className="font-medium text-foreground">{label}</span> to confirm.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <Input
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                placeholder={label}
+                autoFocus
+              />
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={confirmText !== label}
+                  onClick={remove}
+                  className="disabled:pointer-events-none disabled:opacity-50"
+                >
+                  Remove display
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -41,7 +41,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
     group: "Orientation & Pairing",
     items: [
       { href: "/screens", label: "Screens", icon: MonitorPlay },
-      { href: "/screens/pair", label: "Pair a TV", icon: QrCode },
+      { href: "/screens/pair", label: "Pair a Display", icon: QrCode },
     ],
   },
 ];
@@ -50,7 +50,7 @@ const TITLES: Record<string, string> = {
   "/categories": "Category",
   "/menu": "Menu",
   "/screens": "Screens",
-  "/screens/pair": "Pair a TV",
+  "/screens/pair": "Pair a Display",
   "/profile": "Profile",
 };
 
@@ -267,7 +267,7 @@ function UserMenu({ email, collapsed }: { email: string; collapsed: boolean }) {
             <AlertDialogTitle>Log out of ImliPos?</AlertDialogTitle>
             <AlertDialogDescription>
               You’ll be signed out of the admin. Your menus and screens keep
-              running on your TVs. You can sign back in anytime.
+              running on your displays. You can sign back in anytime.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

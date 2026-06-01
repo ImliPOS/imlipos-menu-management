@@ -138,6 +138,7 @@ export const devices = pgTable(
     screenId: uuid("screen_id").references(() => screens.id, {
       onDelete: "set null",
     }),
+    name: text("name"),
     hardwareId: text("hardware_id").notNull(),
     pairingCode: text("pairing_code"),
     pairingExpiresAt: timestamp("pairing_expires_at", { withTimezone: true }),

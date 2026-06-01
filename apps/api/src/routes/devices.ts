@@ -115,6 +115,7 @@ devicesRouter.post("/pair", requireOwner, async (req, res) => {
     .set({
       shopId: shopId(req),
       screenId: parsed.data.screenId,
+      name: parsed.data.name,
       status: "active",
       pairingCode: null,
       pairingExpiresAt: null,
@@ -130,6 +131,7 @@ devicesRouter.get("/", requireOwner, async (req, res) => {
     .select({
       id: devices.id,
       screenId: devices.screenId,
+      name: devices.name,
       status: devices.status,
       lastSeenAt: devices.lastSeenAt,
       createdAt: devices.createdAt,
