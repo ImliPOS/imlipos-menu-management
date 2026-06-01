@@ -33,6 +33,7 @@ export function initIO(server: HttpServer) {
         socket.data.kind = "device";
         socket.data.shopId = d.shopId;
         socket.data.screenId = d.screenId;
+        socket.data.deviceId = d.sub;
       } catch {
         const user = await verifySupabaseToken(token);
         const [shop] = await db
@@ -50,6 +51,10 @@ export function initIO(server: HttpServer) {
   });
 
   io.on("connection", (socket) => {
+    // A device auto-joins its own room so we can target it for un-pair.
+    if (socket.data.kind === "device" && socket.data.deviceId) {
+      socket.join(ROOM.device(socket.data.deviceId));
+    }
     socket.on(CLIENT_EVENTS.joinScreen, (screenId) => {
       // Only allow a device to join the screen its token is scoped to.
       if (socket.data.kind === "device" && socket.data.screenId === screenId) {
@@ -94,4 +99,9 @@ export function emitScreenReassigned(screenId: string) {
   getIO()
     .to(ROOM.screen(screenId))
     .emit(SERVER_EVENTS.screenReassigned, { screenId });
+}
+
+/** Tell a specific device to un-pair immediately (removed/revoked). */
+export function emitDeviceUnpaired(deviceId: string) {
+  getIO().to(ROOM.device(deviceId)).emit(SERVER_EVENTS.deviceUnpaired);
 }

@@ -18,6 +18,7 @@ export function connectSocket(
     onRefresh: () => void;
     onReassigned: (screenId: string) => void;
     onReconnect: () => void;
+    onUnpair: () => void;
   },
 ): TvSocket {
   const socket: TvSocket = io(SOCKET_URL, {
@@ -41,6 +42,7 @@ export function connectSocket(
   socket.on(SERVER_EVENTS.screenReassigned, (p) =>
     handlers.onReassigned(p.screenId),
   );
+  socket.on(SERVER_EVENTS.deviceUnpaired, () => handlers.onUnpair());
 
   return socket;
 }

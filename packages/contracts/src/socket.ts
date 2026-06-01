@@ -12,6 +12,7 @@ import { z } from "zod";
 export const ROOM = {
   screen: (screenId: string) => `screen:${screenId}` as const,
   shop: (shopId: string) => `shop:${shopId}` as const,
+  device: (deviceId: string) => `device:${deviceId}` as const,
 };
 
 /** Server → client events. */
@@ -20,6 +21,8 @@ export const SERVER_EVENTS = {
   categoryUpdated: "category.updated",
   screenReassigned: "screen.reassigned",
   menuRefresh: "menu.refresh",
+  /** Tells a specific TV to un-pair immediately (removed/revoked). */
+  deviceUnpaired: "device.unpaired",
 } as const;
 
 /** Client → server events. */
@@ -65,6 +68,7 @@ export interface ServerToClientEvents {
   "category.updated": (p: CategoryUpdatedPayload) => void;
   "screen.reassigned": (p: ScreenReassignedPayload) => void;
   "menu.refresh": (p: MenuRefreshPayload) => void;
+  "device.unpaired": () => void;
 }
 
 export interface ClientToServerEvents {

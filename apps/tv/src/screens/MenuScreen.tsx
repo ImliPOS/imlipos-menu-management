@@ -83,6 +83,7 @@ export function MenuScreen({
         setOnline(true);
         refresh();
       },
+      onUnpair: () => void unpair(),
     });
     socketRef.current.on("disconnect", () => setOnline(false));
 

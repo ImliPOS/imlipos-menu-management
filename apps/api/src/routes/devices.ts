@@ -8,7 +8,7 @@ import {
 import { db, schema } from "../db/client.js";
 import { requireOwner, requireDevice, shopId } from "../middleware/auth.js";
 import { signDeviceToken } from "../auth/tokens.js";
-import { emitScreenReassigned } from "../realtime/io.js";
+import { emitScreenReassigned, emitDeviceUnpaired } from "../realtime/io.js";
 
 const { devices, screens } = schema;
 export const devicesRouter = Router();
@@ -166,6 +166,7 @@ devicesRouter.post("/:id/revoke", requireOwner, async (req, res) => {
     .update(devices)
     .set({ status: "revoked", screenId: null })
     .where(and(eq(devices.id, req.params.id), eq(devices.shopId, shopId(req))));
+  emitDeviceUnpaired(req.params.id);
   res.json({ ok: true });
 });
 
@@ -176,6 +177,8 @@ devicesRouter.delete("/:id", requireOwner, async (req, res) => {
     .where(and(eq(devices.id, req.params.id), eq(devices.shopId, shopId(req))))
     .returning({ id: devices.id });
   if (!row) return res.status(404).json({ error: "Not found" });
+  // Push an immediate un-pair to the TV (it's likely still socket-connected).
+  emitDeviceUnpaired(req.params.id);
   res.status(204).end();
 });
 
