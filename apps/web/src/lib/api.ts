@@ -78,6 +78,10 @@ export const api = {
   listScreens: () => call<Screen[]>("/screens"),
   createScreen: (b: CreateScreenInput) =>
     call<Screen>("/screens", { method: "POST", body: JSON.stringify(b) }),
+  updateScreen: (id: string, b: Partial<CreateScreenInput>) =>
+    call<Screen>(`/screens/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
+  deleteScreen: (id: string) =>
+    call<void>(`/screens/${id}`, { method: "DELETE" }),
   getScreenCategories: (screenId: string) =>
     call<{ categoryId: string; sortOrder: number }[]>(
       `/screens/${screenId}/categories`,
@@ -92,6 +96,7 @@ export const api = {
     }),
   // devices
   listDevices: () => call<Device[]>("/devices"),
+  removeDevice: (id: string) => call<void>(`/devices/${id}`, { method: "DELETE" }),
   pairDevice: (b: PairDeviceInput) =>
     call<{ ok: true }>("/devices/pair", {
       method: "POST",

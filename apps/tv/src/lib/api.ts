@@ -31,6 +31,12 @@ export async function pollStatus(
 }
 
 /** Fetch authoritative content for the bound screen (boot + on reconnect). */
+export class HttpError extends Error {
+  constructor(public status: number) {
+    super(`HTTP ${status}`);
+  }
+}
+
 export async function fetchScreenContent(
   screenId: string,
   deviceToken: string,
@@ -38,7 +44,7 @@ export async function fetchScreenContent(
   const res = await fetch(`${API_URL}/screens/${screenId}/content`, {
     headers: { Authorization: `Bearer ${deviceToken}` },
   });
-  if (!res.ok) throw new Error("content failed");
+  if (!res.ok) throw new HttpError(res.status);
   return res.json();
 }
 

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FlatList, StyleSheet, Text, View } from "react-native";
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import type { ScreenContent } from "@imlipos/contracts";
-import { fetchScreenContent, heartbeat } from "../lib/api";
+import { fetchScreenContent, heartbeat, HttpError } from "../lib/api";
 import { connectSocket, type TvSocket } from "../lib/socket";
-import { loadSnapshot, saveSnapshot } from "../db/cache";
+import { clearSnapshot, loadSnapshot, saveSnapshot } from "../db/cache";
+import { store } from "../lib/storage";
 
 /**
  * The live menu board. Renders from cache instantly, fetches authoritative
@@ -13,13 +14,28 @@ import { loadSnapshot, saveSnapshot } from "../db/cache";
 export function MenuScreen({
   deviceToken,
   screenId,
+  onUnpaired,
 }: {
   deviceToken: string;
   screenId: string;
+  onUnpaired: () => void;
 }) {
   const [content, setContent] = useState<ScreenContent | null>(null);
   const [online, setOnline] = useState(true);
   const socketRef = useRef<TvSocket | null>(null);
+
+  // Clear all local pairing state and return to the pairing screen.
+  const unpair = useCallback(async () => {
+    await Promise.all([
+      store.del("deviceToken"),
+      store.del("screenId"),
+      store.del("claimToken"),
+      store.del("deviceId"),
+      clearSnapshot(screenId),
+    ]);
+    socketRef.current?.disconnect();
+    onUnpaired();
+  }, [screenId, onUnpaired]);
 
   const refresh = useCallback(async () => {
     try {
@@ -27,10 +43,28 @@ export function MenuScreen({
       setContent(fresh);
       setOnline(true);
       await saveSnapshot(fresh);
-    } catch {
+    } catch (e) {
+      // Authoritative rejection (device revoked/deleted, screen deleted) → un-pair.
+      if (e instanceof HttpError && [401, 403, 404].includes(e.status)) {
+        await unpair();
+        return;
+      }
+      // Genuine network failure → keep showing cache.
       setOnline(false);
     }
-  }, [screenId, deviceToken]);
+  }, [screenId, deviceToken, unpair]);
+
+  // Long-press anywhere to reset this TV (staff with physical/remote access).
+  const confirmReset = useCallback(() => {
+    Alert.alert(
+      "Reset this TV?",
+      "This unpairs the TV and shows a new pairing code. The menu stays running on other TVs.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Reset", style: "destructive", onPress: () => void unpair() },
+      ],
+    );
+  }, [unpair]);
 
   useEffect(() => {
     // 1. Instant render from cache.
@@ -64,10 +98,15 @@ export function MenuScreen({
     if (content) saveSnapshot(content).catch(() => {});
   }, [content]);
 
-  if (!content) return <View style={styles.root}><Text style={styles.dim}>Loading…</Text></View>;
+  if (!content)
+    return (
+      <Pressable onLongPress={confirmReset} delayLongPress={2000} style={styles.root}>
+        <Text style={styles.dim}>Loading…</Text>
+      </Pressable>
+    );
 
   return (
-    <View style={styles.root}>
+    <Pressable onLongPress={confirmReset} delayLongPress={2000} style={styles.root}>
       {!online && <View style={styles.offline}><Text style={styles.offlineText}>OFFLINE — showing last menu</Text></View>}
       <FlatList
         data={content.categories.filter(
@@ -88,7 +127,7 @@ export function MenuScreen({
           </View>
         )}
       />
-    </View>
+    </Pressable>
   );
 }
 

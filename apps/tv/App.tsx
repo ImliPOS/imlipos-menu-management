@@ -28,7 +28,16 @@ export default function App() {
     setState({ phase: "paired", deviceToken, screenId });
   }, []);
 
+  // Device/screen removed or revoked → drop back to pairing.
+  const onUnpaired = useCallback(() => setState({ phase: "pairing" }), []);
+
   if (state.phase === "loading") return <View style={{ flex: 1, backgroundColor: "#0a0a0a" }} />;
   if (state.phase === "pairing") return <PairingScreen onPaired={onPaired} />;
-  return <MenuScreen deviceToken={state.deviceToken} screenId={state.screenId} />;
+  return (
+    <MenuScreen
+      deviceToken={state.deviceToken}
+      screenId={state.screenId}
+      onUnpaired={onUnpaired}
+    />
+  );
 }

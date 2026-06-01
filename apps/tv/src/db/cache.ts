@@ -34,6 +34,11 @@ export async function saveSnapshot(content: ScreenContent): Promise<void> {
   );
 }
 
+export async function clearSnapshot(screenId: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`DELETE FROM snapshot WHERE screen_id = ?;`, screenId);
+}
+
 export async function loadSnapshot(
   screenId: string,
 ): Promise<ScreenContent | null> {

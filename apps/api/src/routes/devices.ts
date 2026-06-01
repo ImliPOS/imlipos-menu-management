@@ -169,6 +169,16 @@ devicesRouter.post("/:id/revoke", requireOwner, async (req, res) => {
   res.json({ ok: true });
 });
 
+/** Owner: remove a device entirely. It un-pairs and shows a fresh code. */
+devicesRouter.delete("/:id", requireOwner, async (req, res) => {
+  const [row] = await db
+    .delete(devices)
+    .where(and(eq(devices.id, req.params.id), eq(devices.shopId, shopId(req))))
+    .returning({ id: devices.id });
+  if (!row) return res.status(404).json({ error: "Not found" });
+  res.status(204).end();
+});
+
 /** Device: heartbeat to update online status. */
 devicesRouter.post("/heartbeat", requireDevice, async (req, res) => {
   await db

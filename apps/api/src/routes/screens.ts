@@ -45,6 +45,16 @@ screensRouter.patch("/:id", requireOwner, async (req, res) => {
   res.json(row);
 });
 
+/** Delete a screen (cascades screen_categories; paired devices are unbound). */
+screensRouter.delete("/:id", requireOwner, async (req, res) => {
+  const [row] = await db
+    .delete(screens)
+    .where(and(eq(screens.id, req.params.id), eq(screens.shopId, shopId(req))))
+    .returning({ id: screens.id });
+  if (!row) return res.status(404).json({ error: "Not found" });
+  res.status(204).end();
+});
+
 /** Set which categories show on a screen, then nudge TVs to refetch. */
 screensRouter.put("/:id/categories", requireOwner, async (req, res) => {
   const parsed = setScreenCategoriesSchema.safeParse(req.body);

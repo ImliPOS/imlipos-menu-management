@@ -64,7 +64,11 @@ export async function requireOwner(
   });
 }
 
-/** Require a device token (TV). Sets req.device. */
+/**
+ * Require a device token (TV). Sets req.device. Also verifies the device row
+ * still exists and is active — so deleting or revoking a device immediately
+ * invalidates its (otherwise stateless) token.
+ */
 export async function requireDevice(
   req: Request,
   res: Response,
@@ -73,7 +77,16 @@ export async function requireDevice(
   const token = bearer(req);
   if (!token) return res.status(401).json({ error: "Missing token" });
   try {
-    req.device = await verifyDeviceToken(token);
+    const claims = await verifyDeviceToken(token);
+    const [dev] = await db
+      .select({ status: schema.devices.status })
+      .from(schema.devices)
+      .where(eq(schema.devices.id, claims.sub))
+      .limit(1);
+    if (!dev || dev.status !== "active") {
+      return res.status(401).json({ error: "Device revoked" });
+    }
+    req.device = claims;
     next();
   } catch {
     res.status(401).json({ error: "Invalid device token" });
