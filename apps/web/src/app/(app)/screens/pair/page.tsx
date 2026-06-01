@@ -10,6 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSeparator,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
+import { REGEXP_ONLY_DIGITS } from "input-otp";
+import {
   Dialog,
   DialogClose,
   DialogContent,
@@ -162,15 +169,28 @@ function PairDeviceDialog({
           </div>
           <div className="space-y-2">
             <Label htmlFor="code">Pairing code</Label>
-            <Input
+            <InputOTP
               id="code"
-              className="tracking-widest"
-              placeholder="6-digit code from the display"
-              inputMode="numeric"
               maxLength={6}
+              pattern={REGEXP_ONLY_DIGITS}
               value={pairingCode}
-              onChange={(e) => setPairingCode(e.target.value.replace(/\D/g, ""))}
-            />
+              onChange={setPairingCode}
+            >
+              <InputOTPGroup>
+                <InputOTPSlot index={0} />
+                <InputOTPSlot index={1} />
+                <InputOTPSlot index={2} />
+              </InputOTPGroup>
+              <InputOTPSeparator />
+              <InputOTPGroup>
+                <InputOTPSlot index={3} />
+                <InputOTPSlot index={4} />
+                <InputOTPSlot index={5} />
+              </InputOTPGroup>
+            </InputOTP>
+            <p className="text-xs text-muted-foreground">
+              Enter the 6-digit code shown on the display.
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="screen">Screen</Label>
