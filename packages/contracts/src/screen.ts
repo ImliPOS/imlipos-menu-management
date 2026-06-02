@@ -67,6 +67,7 @@ export const screenContentSchema = z.object({
           mediaUrl: z.string().url().nullable(),
           mediaType: z.enum(["image", "video"]).nullable(),
           isAvailable: z.boolean(),
+          isFeatured: z.boolean(),
           sortOrder: z.number().int(),
         }),
       ),

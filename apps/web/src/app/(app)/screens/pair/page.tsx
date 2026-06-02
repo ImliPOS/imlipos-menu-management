@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PlusIcon, Trash2Icon, Tv } from "lucide-react";
+import Link from "next/link";
+import { PlusIcon, Tv } from "lucide-react";
 import type { Device, Screen } from "@imlipos/contracts";
 import { api } from "@/lib/api";
 import { PageSpinner } from "@/components/ui/spinner";
@@ -18,7 +19,6 @@ import {
 import { REGEXP_ONLY_DIGITS } from "input-otp";
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -26,17 +26,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 
 const field =
   "h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring";
@@ -99,7 +88,6 @@ export default function PairDevice() {
               key={d.id}
               device={d}
               screen={d.screenId ? screenById.get(d.screenId) : undefined}
-              onRemoved={(id) => setDevices((p) => p.filter((x) => x.id !== id))}
             />
           ))}
         </div>
@@ -226,129 +214,29 @@ function PairDeviceDialog({
   );
 }
 
-function DisplayCard({
-  device,
-  screen,
-  onRemoved,
-}: {
-  device: Device;
-  screen?: Screen;
-  onRemoved: (id: string) => void;
-}) {
+function DisplayCard({ device, screen }: { device: Device; screen?: Screen }) {
   const online = isOnline(device);
   const ratio = screen?.orientation === "portrait" ? 9 / 16 : 16 / 9;
   const label = device.name ?? screen?.name ?? "Display";
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [confirmText, setConfirmText] = useState("");
-
-  async function remove() {
-    await api.removeDevice(device.id);
-    onRemoved(device.id);
-  }
 
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <button type="button" className="group block w-full cursor-pointer text-left">
-          <AspectRatio ratio={ratio}>
-            <div className="relative flex h-full items-center justify-center rounded-lg border border-border bg-secondary/40 px-2 text-center transition-colors group-hover:border-foreground/40">
-              <span
-                className={`absolute right-2 top-2 h-2 w-2 rounded-full ${
-                  online ? "bg-green-400" : "bg-muted-foreground"
-                }`}
-              />
-              <span className="flex flex-col items-center gap-1">
-                <Tv className="size-5 text-muted-foreground" />
-                <span className="font-medium">{label}</span>
-              </span>
-            </div>
-          </AspectRatio>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {online ? "Online" : "Offline"}
-          </p>
-        </button>
-      </DialogTrigger>
-
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{label}</DialogTitle>
-          <DialogDescription>Display details</DialogDescription>
-        </DialogHeader>
-        <dl className="mt-2 space-y-3 text-sm">
-          <Row label="Name">{device.name ?? "—"}</Row>
-          <Row label="Status">
-            <span className="flex items-center gap-2">
-              <span className={`h-2 w-2 rounded-full ${online ? "bg-green-400" : "bg-muted-foreground"}`} />
-              {online ? "Online" : "Offline"}
-            </span>
-          </Row>
-          <Row label="Screen">{screen?.name ?? "—"}</Row>
-          <Row label="Orientation">{screen?.orientation ?? "—"}</Row>
-          <Row label="Last seen">
-            {device.lastSeenAt ? new Date(device.lastSeenAt).toLocaleString() : "Never"}
-          </Row>
-          <Row label="Paired since">
-            {new Date(device.createdAt).toLocaleDateString()}
-          </Row>
-          <Row label="Device ID">
-            <span className="font-mono text-xs">{device.id.slice(0, 8)}…</span>
-          </Row>
-        </dl>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline">Close</Button>
-          </DialogClose>
-          <AlertDialog
-            open={confirmOpen}
-            onOpenChange={(o) => {
-              setConfirmOpen(o);
-              if (!o) setConfirmText("");
-            }}
-          >
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive">
-                <Trash2Icon className="size-4" />
-                Remove display
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Remove “{label}”?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This un-pairs the display — it stops showing the menu and returns to
-                  its pairing code. This can’t be undone. Type{" "}
-                  <span className="font-medium text-foreground">{label}</span> to confirm.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <Input
-                value={confirmText}
-                onChange={(e) => setConfirmText(e.target.value)}
-                placeholder={label}
-                autoFocus
-              />
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  disabled={confirmText !== label}
-                  onClick={remove}
-                  className="disabled:pointer-events-none disabled:opacity-50"
-                >
-                  Remove display
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="text-foreground">{children}</dd>
-    </div>
+    <Link href={`/screens/pair/${device.id}`} className="group block">
+      <AspectRatio ratio={ratio}>
+        <div className="relative flex h-full items-center justify-center rounded-lg border border-border bg-secondary/40 px-2 text-center transition-colors group-hover:border-foreground/40">
+          <span
+            className={`absolute right-2 top-2 h-2 w-2 rounded-full ${
+              online ? "bg-green-400" : "bg-muted-foreground"
+            }`}
+          />
+          <span className="flex flex-col items-center gap-1">
+            <Tv className="size-5 text-muted-foreground" />
+            <span className="font-medium">{label}</span>
+          </span>
+        </div>
+      </AspectRatio>
+      <p className="mt-2 text-sm text-muted-foreground">
+        {online ? "Online" : "Offline"}
+      </p>
+    </Link>
   );
 }

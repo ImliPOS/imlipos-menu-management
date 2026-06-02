@@ -11,7 +11,11 @@ import {
   bumpScreenVersion,
   screensShowingCategory,
 } from "../services/content.js";
-import { emitCategoryUpdated, emitMenuRefresh } from "../realtime/io.js";
+import {
+  emitCategoryUpdated,
+  emitMenuRefresh,
+  emitShopMenuChanged,
+} from "../realtime/io.js";
 
 const { categories } = schema;
 export const categoriesRouter = Router();
@@ -45,6 +49,7 @@ categoriesRouter.patch("/:id", async (req, res) => {
     .where(and(eq(categories.id, req.params.id), eq(categories.shopId, shopId(req))))
     .returning();
   if (!row) return res.status(404).json({ error: "Not found" });
+  emitShopMenuChanged(shopId(req));
   res.json(row);
 });
 
@@ -69,6 +74,7 @@ categoriesRouter.patch("/:id/availability", async (req, res) => {
       version,
     });
   }
+  emitShopMenuChanged(shopId(req));
   res.json(row);
 });
 
@@ -85,5 +91,6 @@ categoriesRouter.delete("/:id", async (req, res) => {
     const version = await bumpScreenVersion(sid);
     emitMenuRefresh(sid, { screenId: sid, version });
   }
+  emitShopMenuChanged(shopId(req));
   res.status(204).end();
 });

@@ -13,6 +13,8 @@ export const ROOM = {
   screen: (screenId: string) => `screen:${screenId}` as const,
   shop: (shopId: string) => `shop:${shopId}` as const,
   device: (deviceId: string) => `device:${deviceId}` as const,
+  /** All displays of a shop — used to nudge layout-based devices to refetch. */
+  shopDevices: (shopId: string) => `shop-devices:${shopId}` as const,
 };
 
 /** Server → client events. */

@@ -39,6 +39,7 @@ export const itemSchema = z.object({
   mediaUrl: z.string().url().nullable(),
   mediaType: mediaType.nullable(),
   isAvailable: z.boolean(),
+  isFeatured: z.boolean(),
   sortOrder: z.number().int().nonnegative(),
   createdAt: isoDate,
   updatedAt: isoDate,
@@ -53,6 +54,7 @@ export const createItemSchema = z.object({
   mediaUrl: z.string().url().nullable().optional(),
   mediaType: mediaType.nullable().optional(),
   isAvailable: z.boolean().optional(),
+  isFeatured: z.boolean().optional(),
   sortOrder: z.number().int().nonnegative().optional(),
 });
 export type CreateItemInput = z.infer<typeof createItemSchema>;
@@ -63,3 +65,26 @@ export type UpdateItemInput = z.infer<typeof updateItemSchema>;
 /** Toggle sold-out (used by both items and categories). */
 export const availabilitySchema = z.object({ isAvailable: z.boolean() });
 export type AvailabilityInput = z.infer<typeof availabilitySchema>;
+
+/** ---- Resolved views (what a display renders) ---- */
+export const menuItemView = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  description: z.string().nullable(),
+  price: z.number(),
+  mediaUrl: z.string().url().nullable(),
+  mediaType: mediaType.nullable(),
+  isAvailable: z.boolean(),
+  isFeatured: z.boolean(),
+  sortOrder: z.number().int(),
+});
+export type MenuItemView = z.infer<typeof menuItemView>;
+
+export const menuCategoryView = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  sortOrder: z.number().int(),
+  isAvailable: z.boolean(),
+  items: z.array(menuItemView),
+});
+export type MenuCategoryView = z.infer<typeof menuCategoryView>;

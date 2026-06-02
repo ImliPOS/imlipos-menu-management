@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isoDate } from "./menu";
+import { deviceLayout, resolution } from "./layout";
 
 export const deviceStatus = z.enum(["pending", "active", "revoked"]);
 export type DeviceStatus = z.infer<typeof deviceStatus>;
@@ -10,10 +11,16 @@ export const deviceSchema = z.object({
   shopId: z.string().uuid().nullable(), // null until claimed
   screenId: z.string().uuid().nullable(),
   name: z.string().nullable(), // owner-given display name, set at pairing
+  resolution: resolution.nullable(), // reported by the device
+  layout: deviceLayout.nullable(), // per-device zone layout
   status: deviceStatus,
   lastSeenAt: isoDate.nullable(),
   createdAt: isoDate,
 });
+
+/** Owner sets a device's layout. */
+export const updateLayoutSchema = deviceLayout;
+export type UpdateLayoutInput = z.infer<typeof updateLayoutSchema>;
 export type Device = z.infer<typeof deviceSchema>;
 
 /**
