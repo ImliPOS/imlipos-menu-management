@@ -3,10 +3,32 @@
     "name": "ImliPos TV",
     "slug": "imlipos-tv",
     "version": "1.0.0",
-    "platforms": ["android"],
-    "android": { "package": "com.imlipos.tv" },
+    "platforms": [
+      "android"
+    ],
+    "android": {
+      "package": "com.imlipos.tv"
+    },
     "plugins": [
-      ["@react-native-tvos/config-tv", { "isTV": true, "tvImagesDir": "./assets" }]
-    ]
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0a0a0a",
+          "resizeMode": "contain"
+        }
+      ],
+      [
+        "@react-native-tvos/config-tv",
+        {
+          "isTV": true
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "c17d31f2-d2bd-43ad-8bc2-b73fbcdb97cc"
+      }
+    },
+    "owner": "arckstechnosoft"
   }
 }
