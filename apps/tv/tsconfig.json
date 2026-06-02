@@ -4,8 +4,7 @@
     "jsx": "react-native",
     "lib": ["dom", "ES2022"],
     "moduleResolution": "Bundler",
-    "noEmit": true,
-    "types": ["react"]
+    "noEmit": true
   },
   "include": ["src", "index.ts", "App.tsx"]
 }

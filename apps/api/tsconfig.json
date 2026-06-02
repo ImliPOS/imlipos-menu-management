@@ -6,6 +6,9 @@
     "noEmit": false,
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    // Express types make req.params.* `string | undefined` under this flag,
+    // which the route handlers rely on being present. Relax it for the API.
+    "noUncheckedIndexedAccess": false,
     "types": ["node"]
   },
   "include": ["src"]

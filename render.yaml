@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: imlipos-api
+    runtime: node
+    # Build/run from the monorepo root so the pnpm workspace resolves.
+    rootDir: .
+    buildCommand: corepack enable && pnpm install --frozen-lockfile
+    startCommand: pnpm --filter @imlipos/api start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NODE_ENV
+        value: production
+      # Secrets — set these in the Render dashboard (sync:false keeps them out of git).
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: menu-media
+      - key: DEVICE_JWT_SECRET
+        sync: false
+      # Your deployed web app origin (for CORS + Socket.IO).
+      - key: WEB_ORIGIN
+        sync: false
