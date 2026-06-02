@@ -185,7 +185,9 @@ export const AuthPanel: React.FC<AuthPanelProps> = ({
           />
           {testimonials.length > 0 && (
             <div className="absolute bottom-8 left-1/2 flex w-full -translate-x-1/2 justify-center gap-4 px-8">
-              <TestimonialCard testimonial={testimonials[0]} delay="animate-delay-1000" />
+              {testimonials[0] && (
+                <TestimonialCard testimonial={testimonials[0]} delay="animate-delay-1000" />
+              )}
               {testimonials[1] && (
                 <div className="hidden xl:flex">
                   <TestimonialCard testimonial={testimonials[1]} delay="animate-delay-1000" />
