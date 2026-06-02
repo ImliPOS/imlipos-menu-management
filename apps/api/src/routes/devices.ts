@@ -4,11 +4,18 @@ import { createHash, randomBytes, randomInt } from "node:crypto";
 import {
   pairDeviceSchema,
   registerDeviceSchema,
+  reportResolutionSchema,
+  updateLayoutSchema,
 } from "@imlipos/contracts";
 import { db, schema } from "../db/client.js";
 import { requireOwner, requireDevice, shopId } from "../middleware/auth.js";
 import { signDeviceToken } from "../auth/tokens.js";
-import { emitScreenReassigned, emitDeviceUnpaired } from "../realtime/io.js";
+import {
+  emitScreenReassigned,
+  emitDeviceUnpaired,
+  emitDeviceRefresh,
+} from "../realtime/io.js";
+import { buildDeviceContent } from "../services/deviceContent.js";
 
 const { devices, screens } = schema;
 export const devicesRouter = Router();
@@ -132,13 +139,31 @@ devicesRouter.get("/", requireOwner, async (req, res) => {
       id: devices.id,
       screenId: devices.screenId,
       name: devices.name,
+      screenWidth: devices.screenWidth,
+      screenHeight: devices.screenHeight,
+      layout: devices.layout,
       status: devices.status,
       lastSeenAt: devices.lastSeenAt,
       createdAt: devices.createdAt,
     })
     .from(devices)
     .where(eq(devices.shopId, shopId(req)));
-  res.json(rows);
+  res.json(
+    rows.map((r) => ({
+      id: r.id,
+      shopId: shopId(req),
+      screenId: r.screenId,
+      name: r.name,
+      resolution:
+        r.screenWidth && r.screenHeight
+          ? { width: r.screenWidth, height: r.screenHeight }
+          : null,
+      layout: r.layout ?? null,
+      status: r.status,
+      lastSeenAt: r.lastSeenAt,
+      createdAt: r.createdAt,
+    })),
+  );
 });
 
 /** Owner: re-assign a TV to a different screen (switches content live). */
@@ -190,5 +215,51 @@ devicesRouter.post("/heartbeat", requireDevice, async (req, res) => {
     .update(devices)
     .set({ lastSeenAt: new Date() })
     .where(eq(devices.id, req.device!.sub));
+  res.json({ ok: true });
+});
+
+/** Device: report its screen resolution (drives the layout editor preview). */
+devicesRouter.post("/resolution", requireDevice, async (req, res) => {
+  const parsed = reportResolutionSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json(parsed.error.flatten());
+  await db
+    .update(devices)
+    .set({ screenWidth: parsed.data.width, screenHeight: parsed.data.height })
+    .where(eq(devices.id, req.device!.sub));
+  res.json({ ok: true });
+});
+
+/** Device: its resolved zone content (boot + on refresh). */
+devicesRouter.get("/content", requireDevice, async (req, res) => {
+  const [device] = await db
+    .select({
+      shopId: devices.shopId,
+      screenId: devices.screenId,
+      layout: devices.layout,
+    })
+    .from(devices)
+    .where(eq(devices.id, req.device!.sub))
+    .limit(1);
+  if (!device?.shopId) return res.status(404).json({ error: "Not found" });
+  const content = await buildDeviceContent(
+    device.shopId,
+    device.screenId,
+    device.layout,
+    Date.now(),
+  );
+  res.json(content);
+});
+
+/** Owner: set a device's layout (zones + content). */
+devicesRouter.patch("/:id/layout", requireOwner, async (req, res) => {
+  const parsed = updateLayoutSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json(parsed.error.flatten());
+  const [row] = await db
+    .update(devices)
+    .set({ layout: parsed.data })
+    .where(and(eq(devices.id, req.params.id), eq(devices.shopId, shopId(req))))
+    .returning({ id: devices.id });
+  if (!row) return res.status(404).json({ error: "Not found" });
+  emitDeviceRefresh(row.id);
   res.json({ ok: true });
 });

@@ -57,7 +57,9 @@ const TITLES: Record<string, string> = {
 export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const title = TITLES[pathname] ?? "";
+  const title =
+    TITLES[pathname] ??
+    (pathname.startsWith("/screens/pair/") ? "Display" : "");
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [email, setEmail] = useState<string>("");

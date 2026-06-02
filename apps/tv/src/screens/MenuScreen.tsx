@@ -1,15 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import type { ScreenContent } from "@imlipos/contracts";
-import { fetchScreenContent, heartbeat, HttpError } from "../lib/api";
+import {
+  Alert,
+  Dimensions,
+  PixelRatio,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { Image } from "expo-image";
+import { Video, ResizeMode } from "expo-av";
+import type { DeviceContent, ResolvedZone } from "@imlipos/contracts";
+import {
+  fetchDeviceContent,
+  heartbeat,
+  HttpError,
+  reportResolution,
+} from "../lib/api";
 import { connectSocket, type TvSocket } from "../lib/socket";
-import { clearSnapshot, loadSnapshot, saveSnapshot } from "../db/cache";
+import { clearDeviceContent, loadDeviceContent, saveDeviceContent } from "../db/cache";
 import { store } from "../lib/storage";
+import { sizedImage } from "../lib/image";
 
 /**
- * The live menu board. Renders from cache instantly, fetches authoritative
- * content, subscribes to its screen room, and applies sold-out toggles in
- * real time. On reconnect it re-fetches (fetch-then-subscribe).
+ * Renders the display's per-device zone layout. Each zone is positioned by
+ * percentage (adapts to any resolution) and renders menu / featured / image /
+ * video. Falls back to a full-screen menu zone when no layout is configured.
  */
 export function MenuScreen({
   deviceToken,
@@ -20,45 +36,41 @@ export function MenuScreen({
   screenId: string;
   onUnpaired: () => void;
 }) {
-  const [content, setContent] = useState<ScreenContent | null>(null);
+  const [content, setContent] = useState<DeviceContent | null>(null);
   const [online, setOnline] = useState(true);
   const socketRef = useRef<TvSocket | null>(null);
 
-  // Clear all local pairing state and return to the pairing screen.
   const unpair = useCallback(async () => {
     await Promise.all([
       store.del("deviceToken"),
       store.del("screenId"),
       store.del("claimToken"),
       store.del("deviceId"),
-      clearSnapshot(screenId),
+      clearDeviceContent(),
     ]);
     socketRef.current?.disconnect();
     onUnpaired();
-  }, [screenId, onUnpaired]);
+  }, [onUnpaired]);
 
   const refresh = useCallback(async () => {
     try {
-      const fresh = await fetchScreenContent(screenId, deviceToken);
+      const fresh = await fetchDeviceContent(deviceToken);
       setContent(fresh);
       setOnline(true);
-      await saveSnapshot(fresh);
+      await saveDeviceContent(fresh);
     } catch (e) {
-      // Authoritative rejection (device revoked/deleted, screen deleted) → un-pair.
       if (e instanceof HttpError && [401, 403, 404].includes(e.status)) {
         await unpair();
         return;
       }
-      // Genuine network failure → keep showing cache.
       setOnline(false);
     }
-  }, [screenId, deviceToken, unpair]);
+  }, [deviceToken, unpair]);
 
-  // Long-press anywhere to reset this TV (staff with physical/remote access).
   const confirmReset = useCallback(() => {
     Alert.alert(
-      "Reset this TV?",
-      "This unpairs the TV and shows a new pairing code. The menu stays running on other TVs.",
+      "Reset this display?",
+      "This unpairs it and shows a new pairing code. Other displays keep running.",
       [
         { text: "Cancel", style: "cancel" },
         { text: "Reset", style: "destructive", onPress: () => void unpair() },
@@ -67,17 +79,18 @@ export function MenuScreen({
   }, [unpair]);
 
   useEffect(() => {
-    // 1. Instant render from cache.
-    loadSnapshot(screenId).then((snap) => snap && setContent(snap));
-    // 2. Fetch authoritative, then subscribe.
+    loadDeviceContent().then((snap) => snap && setContent(snap));
     refresh();
 
+    // Report resolution once (pixels).
+    const { width, height } = Dimensions.get("screen");
+    const scale = PixelRatio.get();
+    reportResolution(deviceToken, Math.round(width * scale), Math.round(height * scale));
+
     socketRef.current = connectSocket(deviceToken, screenId, {
-      onItemUpdated: (itemId, isAvailable) =>
-        setContent((c) => applyItem(c, itemId, isAvailable)),
-      onCategoryUpdated: (categoryId, isAvailable) =>
-        setContent((c) => applyCategory(c, categoryId, isAvailable)),
-      onRefresh: refresh,
+      onItemUpdated: () => refresh(),
+      onCategoryUpdated: () => refresh(),
+      onRefresh: () => refresh(),
       onReassigned: () => refresh(),
       onReconnect: () => {
         setOnline(true);
@@ -92,12 +105,7 @@ export function MenuScreen({
       clearInterval(hb);
       socketRef.current?.disconnect();
     };
-  }, [deviceToken, screenId, refresh]);
-
-  // Persist whenever content changes from a live event.
-  useEffect(() => {
-    if (content) saveSnapshot(content).catch(() => {});
-  }, [content]);
+  }, [deviceToken, screenId, refresh, unpair]);
 
   if (!content)
     return (
@@ -108,59 +116,124 @@ export function MenuScreen({
 
   return (
     <Pressable onLongPress={confirmReset} delayLongPress={2000} style={styles.root}>
-      {!online && <View style={styles.offline}><Text style={styles.offlineText}>OFFLINE — showing last menu</Text></View>}
-      <FlatList
-        data={content.categories.filter(
-          (c) => c.isAvailable && c.items.some((i) => i.isAvailable),
-        )}
-        keyExtractor={(c) => c.id}
-        renderItem={({ item: cat }) => (
-          <View style={styles.category}>
-            <Text style={styles.catTitle}>{cat.name}</Text>
-            {cat.items
-              .filter((it) => it.isAvailable)
-              .map((it) => (
-                <View key={it.id} style={styles.row}>
-                  <Text style={styles.item}>{it.name}</Text>
-                  <Text style={styles.price}>₹{it.price}</Text>
-                </View>
-              ))}
+      {!online && (
+        <View style={styles.offline}>
+          <Text style={styles.offlineText}>OFFLINE — showing last menu</Text>
+        </View>
+      )}
+      <View style={styles.canvas}>
+        {content.zones.map((z) => (
+          <View
+            key={z.id}
+            style={{
+              position: "absolute",
+              left: `${z.x}%`,
+              top: `${z.y}%`,
+              width: `${z.w}%`,
+              height: `${z.h}%`,
+            }}
+          >
+            <Zone zone={z} />
           </View>
-        )}
-      />
+        ))}
+      </View>
     </Pressable>
   );
 }
 
-function applyItem(c: ScreenContent | null, itemId: string, isAvailable: boolean) {
-  if (!c) return c;
-  return {
-    ...c,
-    categories: c.categories.map((cat) => ({
-      ...cat,
-      items: cat.items.map((i) => (i.id === itemId ? { ...i, isAvailable } : i)),
-    })),
-  };
-}
-function applyCategory(c: ScreenContent | null, categoryId: string, isAvailable: boolean) {
-  if (!c) return c;
-  return {
-    ...c,
-    categories: c.categories.map((cat) =>
-      cat.id === categoryId ? { ...cat, isAvailable } : cat,
-    ),
-  };
+function Zone({ zone }: { zone: ResolvedZone }) {
+  if (zone.type === "image") {
+    return zone.mediaUrl ? (
+      <Image
+        source={{ uri: sizedImage(zone.mediaUrl, 960) }}
+        style={styles.fill}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+        transition={200}
+      />
+    ) : (
+      <View style={styles.placeholder} />
+    );
+  }
+
+  if (zone.type === "video") {
+    return zone.mediaUrl ? (
+      <Video
+        source={{ uri: zone.mediaUrl }}
+        style={styles.fill}
+        resizeMode={ResizeMode.COVER}
+        isLooping
+        shouldPlay
+        isMuted
+      />
+    ) : (
+      <View style={styles.placeholder} />
+    );
+  }
+
+  if (zone.type === "featured") {
+    const imgs = (zone.categories ?? [])
+      .filter((c) => c.isAvailable)
+      .flatMap((c) => c.items.filter((i) => i.isAvailable && i.isFeatured && i.mediaUrl));
+    return (
+      <View style={styles.zonePad}>
+        <View style={styles.featColumn}>
+          {imgs.map((it) => (
+            <View key={it.id} style={styles.featCard}>
+              <Image
+                source={{ uri: sizedImage(it.mediaUrl, 480) }}
+                style={styles.fill}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={200}
+              />
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  }
+
+  // menu
+  const cats = (zone.categories ?? []).filter(
+    (c) => c.isAvailable && c.items.some((i) => i.isAvailable),
+  );
+  return (
+    <View style={styles.zonePad}>
+      {cats.map((cat) => (
+        <View key={cat.id} style={styles.category}>
+          <Text style={styles.catTitle}>{cat.name}</Text>
+          {cat.items
+            .filter((it) => it.isAvailable)
+            .map((it) => (
+              <View key={it.id} style={styles.row}>
+                <Text style={styles.item}>{it.name}</Text>
+                <Text style={styles.price}>₹{it.price}</Text>
+              </View>
+            ))}
+        </View>
+      ))}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#0a0a0a", padding: 48 },
-  dim: { color: "#888", fontSize: 28 },
-  category: { marginBottom: 40 },
-  catTitle: { color: "#f5d90a", fontSize: 40, fontWeight: "800", marginBottom: 16 },
-  row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 10 },
-  item: { color: "#fff", fontSize: 30 },
-  price: { color: "#fff", fontSize: 30, fontWeight: "700" },
-  soldOut: { color: "#666", textDecorationLine: "line-through" },
-  offline: { backgroundColor: "#7f1d1d", padding: 8, marginBottom: 16, borderRadius: 8 },
+  root: { flex: 1, backgroundColor: "#0a0a0a" },
+  canvas: { flex: 1, position: "relative" },
+  fill: { width: "100%", height: "100%", backgroundColor: "#161616" },
+  placeholder: { width: "100%", height: "100%", backgroundColor: "#161616" },
+  dim: { color: "#888", fontSize: 28, padding: 48 },
+
+  zonePad: { flex: 1, padding: 32 },
+  category: { marginBottom: 28 },
+  catTitle: { color: "#f5d90a", fontSize: 34, fontWeight: "800", marginBottom: 12 },
+  row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 8 },
+  item: { color: "#fff", fontSize: 26 },
+  price: { color: "#fff", fontSize: 26, fontWeight: "700" },
+
+  featColumn: { flex: 1, gap: 16 },
+  featCard: { flex: 1, minHeight: 0, borderRadius: 16, overflow: "hidden" },
+
+  offline: { backgroundColor: "#7f1d1d", padding: 8 },
   offlineText: { color: "#fff", textAlign: "center", fontSize: 18 },
 });

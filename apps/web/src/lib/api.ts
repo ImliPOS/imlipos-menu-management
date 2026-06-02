@@ -9,6 +9,8 @@ import type {
   Item,
   PairDeviceInput,
   Screen,
+  UpdateItemInput,
+  DeviceLayout,
 } from "@imlipos/contracts";
 
 import { supabase } from "./supabase";
@@ -68,6 +70,8 @@ export const api = {
   listItems: () => call<Item[]>("/items"),
   createItem: (b: CreateItemInput) =>
     call<Item>("/items", { method: "POST", body: JSON.stringify(b) }),
+  updateItem: (id: string, b: UpdateItemInput) =>
+    call<Item>(`/items/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
   toggleItem: (id: string, isAvailable: boolean) =>
     call<Item>(`/items/${id}/availability`, {
       method: "PATCH",
@@ -97,6 +101,11 @@ export const api = {
   // devices
   listDevices: () => call<Device[]>("/devices"),
   removeDevice: (id: string) => call<void>(`/devices/${id}`, { method: "DELETE" }),
+  updateDeviceLayout: (id: string, layout: DeviceLayout) =>
+    call<{ ok: true }>(`/devices/${id}/layout`, {
+      method: "PATCH",
+      body: JSON.stringify(layout),
+    }),
   pairDevice: (b: PairDeviceInput) =>
     call<{ ok: true }>("/devices/pair", {
       method: "POST",

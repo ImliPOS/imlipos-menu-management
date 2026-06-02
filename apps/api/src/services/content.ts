@@ -86,6 +86,7 @@ export async function buildScreenContent(
             mediaUrl: i.mediaUrl,
             mediaType: i.mediaType,
             isAvailable: i.isAvailable,
+            isFeatured: i.isFeatured,
             sortOrder: i.sortOrder,
           })),
       };

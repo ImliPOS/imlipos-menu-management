@@ -1,4 +1,5 @@
 import type {
+  DeviceContent,
   DeviceStatusResponse,
   RegisterDeviceResponse,
   ScreenContent,
@@ -52,5 +53,32 @@ export async function heartbeat(deviceToken: string): Promise<void> {
   await fetch(`${API_URL}/devices/heartbeat`, {
     method: "POST",
     headers: { Authorization: `Bearer ${deviceToken}` },
+  }).catch(() => {});
+}
+
+/** Fetch this device's resolved zone layout (boot + on refresh). */
+export async function fetchDeviceContent(
+  deviceToken: string,
+): Promise<DeviceContent> {
+  const res = await fetch(`${API_URL}/devices/content`, {
+    headers: { Authorization: `Bearer ${deviceToken}` },
+  });
+  if (!res.ok) throw new HttpError(res.status);
+  return res.json();
+}
+
+/** Report the display's pixel resolution (drives the editor preview). */
+export async function reportResolution(
+  deviceToken: string,
+  width: number,
+  height: number,
+): Promise<void> {
+  await fetch(`${API_URL}/devices/resolution`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${deviceToken}`,
+    },
+    body: JSON.stringify({ width, height }),
   }).catch(() => {});
 }

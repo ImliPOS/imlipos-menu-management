@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { PlusIcon, Trash2Icon } from "lucide-react";
+import { ImageIcon, Pencil, PlusIcon, Star, Trash2Icon, UploadCloud, X } from "lucide-react";
 import type { Category, Item } from "@imlipos/contracts";
-import { api } from "@/lib/api";
+import { api, uploadMedia } from "@/lib/api";
 import { PageSpinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,9 +38,17 @@ export default function Menu() {
       .finally(() => setLoading(false));
   }, []);
 
+  function upsertItem(it: Item) {
+    setItems((prev) =>
+      prev.some((x) => x.id === it.id)
+        ? prev.map((x) => (x.id === it.id ? it : x))
+        : [...prev, it],
+    );
+  }
+
   async function toggleItem(it: Item) {
     const updated = await api.toggleItem(it.id, !it.isAvailable);
-    setItems((prev) => prev.map((x) => (x.id === it.id ? updated : x)));
+    upsertItem(updated);
   }
 
   async function deleteItem(it: Item) {
@@ -71,9 +79,15 @@ export default function Menu() {
           {items.length} item{items.length === 1 ? "" : "s"} across {categories.length}{" "}
           categor{categories.length === 1 ? "y" : "ies"}
         </p>
-        <AddItemDialog
+        <ItemDialog
           categories={categories}
-          onCreated={(it) => setItems((p) => [...p, it])}
+          onSaved={upsertItem}
+          trigger={
+            <Button>
+              <PlusIcon className="size-4" />
+              Add Item
+            </Button>
+          }
         />
       </div>
 
@@ -90,11 +104,22 @@ export default function Menu() {
             </h2>
             <ul className="divide-y divide-border rounded-lg border border-border bg-card">
               {catItems.map((it) => (
-                <li key={it.id} className="flex items-center justify-between px-4 py-3">
-                  <span className={it.isAvailable ? "" : "text-muted-foreground line-through"}>
-                    {it.name} — ₹{it.price}
-                  </span>
-                  <div className="flex items-center gap-4">
+                <li key={it.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Thumb url={it.mediaUrl} />
+                    <span className={it.isAvailable ? "" : "text-muted-foreground line-through"}>
+                      {it.name} — ₹{it.price}
+                    </span>
+                    {it.isFeatured && (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-300"
+                        title="Featured on display"
+                      >
+                        <Star className="size-3 fill-current" /> Featured
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
                     <span
                       className={`rounded-md px-3 py-1 text-sm ${
                         it.isAvailable
@@ -108,6 +133,19 @@ export default function Menu() {
                       checked={it.isAvailable}
                       onCheckedChange={() => toggleItem(it)}
                       aria-label={`Toggle ${it.name}`}
+                    />
+                    <ItemDialog
+                      categories={categories}
+                      item={it}
+                      onSaved={upsertItem}
+                      trigger={
+                        <button
+                          className="text-muted-foreground hover:text-foreground"
+                          aria-label={`Edit ${it.name}`}
+                        >
+                          <Pencil className="size-4" />
+                        </button>
+                      }
                     />
                     <button
                       onClick={() => deleteItem(it)}
@@ -130,24 +168,69 @@ export default function Menu() {
   );
 }
 
-function AddItemDialog({
+function Thumb({ url }: { url: string | null }) {
+  if (!url)
+    return (
+      <div className="flex size-10 shrink-0 items-center justify-center rounded-md border border-border bg-background text-muted-foreground">
+        <ImageIcon className="size-4" />
+      </div>
+    );
+  return (
+    <img
+      src={url}
+      alt=""
+      className="size-10 shrink-0 rounded-md border border-border object-cover"
+    />
+  );
+}
+
+function ItemDialog({
   categories,
-  onCreated,
+  item,
+  trigger,
+  onSaved,
 }: {
   categories: Category[];
-  onCreated: (it: Item) => void;
+  item?: Item;
+  trigger: React.ReactNode;
+  onSaved: (it: Item) => void;
 }) {
+  const editing = !!item;
+  const firstCat = useMemo(() => categories[0]?.id ?? "", [categories]);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [mediaUrl, setMediaUrl] = useState<string | null>(null);
+  const [featured, setFeatured] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  // Default the category to the first one whenever the dialog opens.
-  const firstCat = useMemo(() => categories[0]?.id ?? "", [categories]);
   function onOpenChange(next: boolean) {
-    if (next) setCategoryId((c) => c || firstCat);
+    if (next) {
+      setName(item?.name ?? "");
+      setPrice(item ? String(item.price) : "");
+      setCategoryId(item?.categoryId ?? firstCat);
+      setMediaUrl(item?.mediaUrl ?? null);
+      setFeatured(item?.isFeatured ?? false);
+    }
     setOpen(next);
+  }
+
+  async function onPickImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.currentTarget.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return alert("Please choose an image");
+    setUploading(true);
+    try {
+      const url = await uploadMedia(file);
+      setMediaUrl(url);
+    } catch (err) {
+      alert(`Upload failed: ${(err as Error).message}`);
+    } finally {
+      setUploading(false);
+    }
   }
 
   async function submit(e: React.FormEvent) {
@@ -156,14 +239,27 @@ function AddItemDialog({
     if (!name.trim() || Number.isNaN(p) || !categoryId) return;
     setBusy(true);
     try {
-      const created = await api.createItem({
-        categoryId,
-        name: name.trim(),
-        price: p,
-      });
-      onCreated(created);
-      setName("");
-      setPrice("");
+      const mediaType = mediaUrl ? ("image" as const) : null;
+      // Featuring requires an image.
+      const isFeatured = featured && !!mediaUrl;
+      const saved = editing
+        ? await api.updateItem(item!.id, {
+            name: name.trim(),
+            price: p,
+            categoryId,
+            mediaUrl,
+            mediaType,
+            isFeatured,
+          })
+        : await api.createItem({
+            categoryId,
+            name: name.trim(),
+            price: p,
+            mediaUrl: mediaUrl ?? undefined,
+            mediaType: mediaType ?? undefined,
+            isFeatured,
+          });
+      onSaved(saved);
       setOpen(false);
     } finally {
       setBusy(false);
@@ -172,18 +268,63 @@ function AddItemDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        <Button>
-          <PlusIcon className="size-4" />
-          Add Item
-        </Button>
-      </DialogTrigger>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add item</DialogTitle>
-          <DialogDescription>Add a dish or drink to a category.</DialogDescription>
+          <DialogTitle>{editing ? "Edit item" : "Add item"}</DialogTitle>
+          <DialogDescription>
+            {editing ? "Update this menu item." : "Add a dish or drink to a category."}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="mt-2 space-y-4">
+          {/* Image */}
+          <div className="space-y-2">
+            <Label>Image</Label>
+            <div className="flex items-center gap-4">
+              <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-background">
+                {mediaUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={mediaUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <ImageIcon className="size-5 text-muted-foreground" />
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm hover:bg-secondary/60">
+                  <UploadCloud className="size-4" />
+                  {uploading ? "Uploading…" : mediaUrl ? "Replace" : "Upload"}
+                  <input type="file" accept="image/*" className="hidden" onChange={onPickImage} />
+                </label>
+                {mediaUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setMediaUrl(null)}
+                    className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-red-400"
+                  >
+                    <X className="size-4" /> Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Feature on display */}
+          <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-background px-3 py-2">
+            <span>
+              <span className="block text-sm font-medium">Feature on display</span>
+              <span className="block text-xs text-muted-foreground">
+                Show this item with its photo in the display’s featured strip.
+                {!mediaUrl && " Add an image first."}
+              </span>
+            </span>
+            <Switch
+              checked={featured && !!mediaUrl}
+              disabled={!mediaUrl}
+              onCheckedChange={setFeatured}
+              aria-label="Feature on display"
+            />
+          </label>
+
           <div className="space-y-2">
             <Label htmlFor="item-name">Item name</Label>
             <Input
@@ -225,9 +366,9 @@ function AddItemDialog({
             </Button>
             <Button
               type="submit"
-              disabled={busy || !name.trim() || price.trim() === "" || !categoryId}
+              disabled={busy || uploading || !name.trim() || price.trim() === ""}
             >
-              {busy ? "Adding…" : "Add Item"}
+              {busy ? "Saving…" : editing ? "Save changes" : "Add Item"}
             </Button>
           </DialogFooter>
         </form>

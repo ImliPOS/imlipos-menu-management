@@ -51,9 +51,11 @@ export function initIO(server: HttpServer) {
   });
 
   io.on("connection", (socket) => {
-    // A device auto-joins its own room so we can target it for un-pair.
+    // A device auto-joins its own room (targeted un-pair / layout refresh) and
+    // the shop-devices room (any menu change → refetch).
     if (socket.data.kind === "device" && socket.data.deviceId) {
       socket.join(ROOM.device(socket.data.deviceId));
+      if (socket.data.shopId) socket.join(ROOM.shopDevices(socket.data.shopId));
     }
     socket.on(CLIENT_EVENTS.joinScreen, (screenId) => {
       // Only allow a device to join the screen its token is scoped to.
@@ -104,4 +106,18 @@ export function emitScreenReassigned(screenId: string) {
 /** Tell a specific device to un-pair immediately (removed/revoked). */
 export function emitDeviceUnpaired(deviceId: string) {
   getIO().to(ROOM.device(deviceId)).emit(SERVER_EVENTS.deviceUnpaired);
+}
+
+/** Tell one device to refetch (e.g. its layout changed). */
+export function emitDeviceRefresh(deviceId: string) {
+  getIO()
+    .to(ROOM.device(deviceId))
+    .emit(SERVER_EVENTS.menuRefresh, { screenId: deviceId, version: Date.now() });
+}
+
+/** Tell every layout-based display in a shop to refetch (menu changed). */
+export function emitShopMenuChanged(shopId: string) {
+  getIO()
+    .to(ROOM.shopDevices(shopId))
+    .emit(SERVER_EVENTS.menuRefresh, { screenId: shopId, version: Date.now() });
 }

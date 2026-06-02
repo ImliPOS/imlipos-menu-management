@@ -9,7 +9,9 @@ import {
   primaryKey,
   index,
   pgEnum,
+  jsonb,
 } from "drizzle-orm/pg-core";
+import type { DeviceLayout } from "@imlipos/contracts";
 
 export const mediaTypeEnum = pgEnum("media_type", ["image", "video"]);
 export const deviceStatusEnum = pgEnum("device_status", [
@@ -74,6 +76,7 @@ export const items = pgTable(
     mediaUrl: text("media_url"),
     mediaType: mediaTypeEnum("media_type"),
     isAvailable: boolean("is_available").notNull().default(true),
+    isFeatured: boolean("is_featured").notNull().default(false),
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -139,6 +142,9 @@ export const devices = pgTable(
       onDelete: "set null",
     }),
     name: text("name"),
+    screenWidth: integer("screen_width"),
+    screenHeight: integer("screen_height"),
+    layout: jsonb("layout").$type<DeviceLayout>(),
     hardwareId: text("hardware_id").notNull(),
     pairingCode: text("pairing_code"),
     pairingExpiresAt: timestamp("pairing_expires_at", { withTimezone: true }),

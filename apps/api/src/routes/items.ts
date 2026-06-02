@@ -11,7 +11,7 @@ import {
   bumpScreenVersion,
   screensShowingCategory,
 } from "../services/content.js";
-import { emitItemUpdated, emitMenuRefresh } from "../realtime/io.js";
+import { emitItemUpdated, emitMenuRefresh, emitShopMenuChanged } from "../realtime/io.js";
 
 const { items } = schema;
 export const itemsRouter = Router();
@@ -37,6 +37,7 @@ itemsRouter.post("/", async (req, res) => {
       shopId: shopId(req),
     })
     .returning();
+  emitShopMenuChanged(shopId(req));
   res.status(201).json(row);
 });
 
@@ -54,6 +55,14 @@ itemsRouter.patch("/:id", async (req, res) => {
     .where(and(eq(items.id, req.params.id), eq(items.shopId, shopId(req))))
     .returning();
   if (!row) return res.status(404).json({ error: "Not found" });
+
+  // Name/price/image change → tell screens showing this item to refetch.
+  const screenIds = await screensShowingCategory(shopId(req), row.categoryId);
+  for (const sid of screenIds) {
+    const version = await bumpScreenVersion(sid);
+    emitMenuRefresh(sid, { screenId: sid, version });
+  }
+  emitShopMenuChanged(shopId(req));
   res.json(row);
 });
 
@@ -78,6 +87,7 @@ itemsRouter.patch("/:id/availability", async (req, res) => {
       version,
     });
   }
+  emitShopMenuChanged(shopId(req));
   res.json(row);
 });
 
@@ -93,5 +103,6 @@ itemsRouter.delete("/:id", async (req, res) => {
     const version = await bumpScreenVersion(sid);
     emitMenuRefresh(sid, { screenId: sid, version });
   }
+  emitShopMenuChanged(shopId(req));
   res.status(204).end();
 });

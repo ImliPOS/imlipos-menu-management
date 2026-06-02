@@ -22,6 +22,20 @@
       "when": 1780304269325,
       "tag": "0002_lean_falcon",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1780314347051,
+      "tag": "0003_lumpy_glorian",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1780382448991,
+      "tag": "0004_magical_whistler",
+      "breakpoints": true
     }
   ]
 }

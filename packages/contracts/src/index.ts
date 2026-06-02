@@ -2,6 +2,7 @@ export * from "./menu";
 export * from "./screen";
 export * from "./device";
 export * from "./socket";
+export * from "./layout";
 
 /** Auth token claim shapes shared across services. */
 export interface OwnerClaims {
