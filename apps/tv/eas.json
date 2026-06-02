@@ -10,8 +10,8 @@
       "distribution": "internal",
       "android": { "buildType": "apk" },
       "env": {
-        "EXPO_PUBLIC_API_URL": "http://REPLACE_WITH_MAC_LAN_IP:4000",
-        "EXPO_PUBLIC_SOCKET_URL": "http://REPLACE_WITH_MAC_LAN_IP:4000"
+        "EXPO_PUBLIC_API_URL": "https://imlipos-menu-management.onrender.com",
+        "EXPO_PUBLIC_SOCKET_URL": "https://imlipos-menu-management.onrender.com"
       }
     },
     "production": {
