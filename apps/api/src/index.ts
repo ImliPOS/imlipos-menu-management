@@ -1,7 +1,7 @@
 import http from "node:http";
 import express from "express";
 import cors from "cors";
-import { env } from "./env.js";
+import { env, corsOrigin } from "./env.js";
 import { initIO } from "./realtime/io.js";
 import { shopsRouter } from "./routes/shops.js";
 import { categoriesRouter } from "./routes/categories.js";
@@ -12,7 +12,7 @@ import { mediaRouter } from "./routes/media.js";
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
-app.use(cors({ origin: env.WEB_ORIGIN, credentials: true }));
+app.use(cors({ origin: corsOrigin, credentials: true }));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 

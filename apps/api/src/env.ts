@@ -12,7 +12,9 @@ const schema = z.object({
   PORT: z.coerce.number().default(4000),
   DATABASE_URL: z.string().url(),
   DEVICE_JWT_SECRET: z.string().min(16),
-  WEB_ORIGIN: z.string().url().default("http://localhost:3000"),
+  // One or more allowed browser origins for CORS, comma-separated.
+  // e.g. "https://app.vercel.app,http://localhost:3000"
+  WEB_ORIGIN: z.string().default("http://localhost:3000"),
   // Supabase Storage (uses the project URL + service-role key, server-side only).
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(16),
@@ -20,3 +22,18 @@ const schema = z.object({
 });
 
 export const env = schema.parse(process.env);
+
+/** Allowed CORS origins, parsed from the comma-separated WEB_ORIGIN. */
+export const webOrigins = env.WEB_ORIGIN.split(",")
+  .map((o) => o.trim().replace(/\/$/, "")) // tolerate trailing slashes
+  .filter(Boolean);
+
+/** cors `origin` option: allow listed origins (and same-origin/no-origin requests). */
+export const corsOrigin = (
+  origin: string | undefined,
+  cb: (err: Error | null, allow?: boolean) => void,
+) => {
+  // No Origin header = same-origin, curl, or native app (TV) → allow.
+  if (!origin) return cb(null, true);
+  cb(null, webOrigins.includes(origin.replace(/\/$/, "")));
+};

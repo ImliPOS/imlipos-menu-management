@@ -13,13 +13,13 @@ import {
 import { eq } from "drizzle-orm";
 import { verifyDeviceToken, verifySupabaseToken } from "../auth/tokens.js";
 import { db, schema } from "../db/client.js";
-import { env } from "../env.js";
+import { corsOrigin } from "../env.js";
 
 let io: Server<ClientToServerEvents, ServerToClientEvents> | null = null;
 
 export function initIO(server: HttpServer) {
   io = new Server<ClientToServerEvents, ServerToClientEvents>(server, {
-    cors: { origin: env.WEB_ORIGIN, credentials: true },
+    cors: { origin: corsOrigin, credentials: true },
   });
 
   /** Authenticate the socket handshake: either a device token or an owner token. */
