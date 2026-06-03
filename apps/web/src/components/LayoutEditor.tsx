@@ -26,9 +26,13 @@ const ZONE_COLORS: Record<string, string> = {
 /** Inline layout editor (used on the device detail page). */
 export function LayoutEditorPanel({
   device,
+  orientation: orientationProp,
   onSaved,
 }: {
   device: Device;
+  /** Intended orientation from the assigned screen (overrides the panel's
+   *  reported resolution — e.g. a landscape panel mounted in portrait). */
+  orientation?: "landscape" | "portrait";
   onSaved?: () => void;
 }) {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -40,15 +44,21 @@ export function LayoutEditorPanel({
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  // The screen's intended orientation wins; fall back to the panel's reported
+  // resolution when no screen orientation is provided.
   const orientation =
-    device.resolution && device.resolution.height > device.resolution.width
+    orientationProp ??
+    (device.resolution && device.resolution.height > device.resolution.width
       ? "portrait"
-      : "landscape";
-  const aspect = device.resolution
-    ? device.resolution.width / device.resolution.height
-    : orientation === "portrait"
-      ? 9 / 16
+      : "landscape");
+  // Preview aspect matches the *intended* orientation (so a landscape panel
+  // mounted in portrait previews tall), using the panel's pixel ratio.
+  const ratio =
+    device.resolution
+      ? Math.max(device.resolution.width, device.resolution.height) /
+        Math.min(device.resolution.width, device.resolution.height)
       : 16 / 9;
+  const aspect = orientation === "portrait" ? 1 / ratio : ratio;
   const templates = useMemo(
     () => LAYOUT_TEMPLATES.filter((t) => t.orientation === orientation),
     [orientation],

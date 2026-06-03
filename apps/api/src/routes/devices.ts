@@ -241,11 +241,24 @@ devicesRouter.get("/content", requireDevice, async (req, res) => {
     .where(eq(devices.id, req.device!.sub))
     .limit(1);
   if (!device?.shopId) return res.status(404).json({ error: "Not found" });
+
+  // Intended orientation comes from the assigned screen (default landscape).
+  let orientation: "landscape" | "portrait" = "landscape";
+  if (device.screenId) {
+    const [scr] = await db
+      .select({ orientation: screens.orientation })
+      .from(screens)
+      .where(eq(screens.id, device.screenId))
+      .limit(1);
+    if (scr?.orientation === "portrait") orientation = "portrait";
+  }
+
   const content = await buildDeviceContent(
     device.shopId,
     device.screenId,
     device.layout,
     Date.now(),
+    orientation,
   );
   res.json(content);
 });

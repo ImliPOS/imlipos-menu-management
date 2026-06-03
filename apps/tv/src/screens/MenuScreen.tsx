@@ -6,7 +6,9 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
+  type ViewStyle,
 } from "react-native";
 import { Image } from "expo-image";
 import { Video, ResizeMode } from "expo-av";
@@ -39,6 +41,7 @@ export function MenuScreen({
   const [content, setContent] = useState<DeviceContent | null>(null);
   const [online, setOnline] = useState(true);
   const socketRef = useRef<TvSocket | null>(null);
+  const { width: panelW, height: panelH } = useWindowDimensions();
 
   const unpair = useCallback(async () => {
     await Promise.all([
@@ -114,6 +117,24 @@ export function MenuScreen({
       </Pressable>
     );
 
+  // The panel is physically rotated when the intended orientation (from the
+  // screen) doesn't match the panel's actual orientation. In that case we lay
+  // the zones out on a swapped (portrait) canvas and rotate the whole thing 90°
+  // so it renders upright on the turned display — video and all.
+  const wantPortrait = content.orientation === "portrait";
+  const panelIsPortrait = panelH > panelW;
+  const rotate = wantPortrait !== panelIsPortrait;
+  const canvasStyle: ViewStyle = rotate
+    ? {
+        position: "absolute",
+        width: panelH, // logical canvas is the panel, swapped
+        height: panelW,
+        top: (panelH - panelW) / 2,
+        left: (panelW - panelH) / 2,
+        transform: [{ rotate: "90deg" }],
+      }
+    : { flex: 1, position: "relative" };
+
   return (
     <Pressable onLongPress={confirmReset} delayLongPress={2000} style={styles.root}>
       {!online && (
@@ -121,7 +142,7 @@ export function MenuScreen({
           <Text style={styles.offlineText}>OFFLINE — showing last menu</Text>
         </View>
       )}
-      <View style={styles.canvas}>
+      <View style={canvasStyle}>
         {content.zones.map((z) => (
           <View
             key={z.id}
@@ -234,6 +255,14 @@ const styles = StyleSheet.create({
   featColumn: { flex: 1, gap: 16 },
   featCard: { flex: 1, minHeight: 0, borderRadius: 16, overflow: "hidden" },
 
-  offline: { backgroundColor: "#7f1d1d", padding: 8 },
+  offline: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    backgroundColor: "#7f1d1d",
+    padding: 8,
+  },
   offlineText: { color: "#fff", textAlign: "center", fontSize: 18 },
 });

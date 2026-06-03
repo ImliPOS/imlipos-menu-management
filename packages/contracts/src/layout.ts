@@ -52,6 +52,9 @@ export type ResolvedZone = z.infer<typeof resolvedZone>;
 
 export const deviceContent = z.object({
   zones: z.array(resolvedZone),
+  /** Intended display orientation (from the assigned screen). The TV rotates
+   *  its whole canvas 90° when this doesn't match the physical panel. */
+  orientation: z.enum(["landscape", "portrait"]).default("landscape"),
   version: z.number().int(),
 });
 export type DeviceContent = z.infer<typeof deviceContent>;

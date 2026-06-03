@@ -143,7 +143,11 @@ export default function DeviceDetail() {
 
       {/* Layout */}
       <h2 className="mb-3 text-lg font-medium">Layout</h2>
-      <LayoutEditorPanel device={device} onSaved={load} />
+      <LayoutEditorPanel
+        device={device}
+        orientation={screen?.orientation}
+        onSaved={load}
+      />
     </div>
   );
 }

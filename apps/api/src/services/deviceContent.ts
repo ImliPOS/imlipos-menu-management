@@ -58,6 +58,7 @@ export async function buildDeviceContent(
   screenId: string | null,
   layout: DeviceLayout | null,
   version: number,
+  orientation: "landscape" | "portrait" = "landscape",
 ): Promise<DeviceContent> {
   if (!layout || layout.zones.length === 0) {
     const assigned = screenId
@@ -76,6 +77,7 @@ export async function buildDeviceContent(
       zones: [
         { id: "default", x: 0, y: 0, w: 100, h: 100, type: "menu", categories: cats },
       ],
+      orientation,
       version,
     };
   }
@@ -101,5 +103,5 @@ export async function buildDeviceContent(
     return { ...base, mediaUrl: z.mediaUrl ?? null };
   });
 
-  return { zones, version };
+  return { zones, orientation, version };
 }
