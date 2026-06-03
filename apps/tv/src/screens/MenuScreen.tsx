@@ -4,6 +4,7 @@ import {
   Dimensions,
   PixelRatio,
   Pressable,
+  StatusBar,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -41,7 +42,11 @@ export function MenuScreen({
   const [content, setContent] = useState<DeviceContent | null>(null);
   const [online, setOnline] = useState(true);
   const socketRef = useRef<TvSocket | null>(null);
-  const { width: panelW, height: panelH } = useWindowDimensions();
+  // Re-render on rotation changes, but size to the *full physical screen*
+  // (Dimensions.screen includes the system-bar area; window excludes it, which
+  // left an uncovered stripe on the rotated canvas).
+  useWindowDimensions();
+  const { width: panelW, height: panelH } = Dimensions.get("screen");
 
   const unpair = useCallback(async () => {
     await Promise.all([
@@ -82,6 +87,8 @@ export function MenuScreen({
   }, [unpair]);
 
   useEffect(() => {
+    // Full-screen kiosk: no status bar.
+    StatusBar.setHidden(true);
     loadDeviceContent().then((snap) => snap && setContent(snap));
     refresh();
 

@@ -7,7 +7,17 @@
       "android"
     ],
     "android": {
-      "package": "com.imlipos.tv"
+      "package": "com.imlipos.tv",
+      "backgroundColor": "#0a0a0a"
+    },
+    "backgroundColor": "#0a0a0a",
+    "androidStatusBar": {
+      "hidden": true,
+      "translucent": true,
+      "backgroundColor": "#00000000"
+    },
+    "androidNavigationBar": {
+      "visible": "immersive"
     },
     "plugins": [
       [
