@@ -109,6 +109,48 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
     ],
   },
   {
+    id: "thirds-lr",
+    label: "3 columns",
+    orientation: "landscape",
+    zones: [
+      { x: 0, y: 0, w: 100 / 3, h: 100, type: "menu" },
+      { x: 100 / 3, y: 0, w: 100 / 3, h: 100, type: "menu" },
+      { x: 200 / 3, y: 0, w: 100 / 3, h: 100, type: "menu" },
+    ],
+  },
+  {
+    id: "media-left-2menu",
+    label: "Featured left + 2 menus",
+    orientation: "landscape",
+    zones: [
+      { x: 0, y: 0, w: 34, h: 100, type: "featured" },
+      { x: 34, y: 0, w: 33, h: 100, type: "menu" },
+      { x: 67, y: 0, w: 33, h: 100, type: "menu" },
+    ],
+  },
+  {
+    id: "banner-3menu",
+    label: "Banner + 3 menus",
+    orientation: "landscape",
+    zones: [
+      { x: 0, y: 0, w: 100, h: 24, type: "image" },
+      { x: 0, y: 24, w: 100 / 3, h: 76, type: "menu" },
+      { x: 100 / 3, y: 24, w: 100 / 3, h: 76, type: "menu" },
+      { x: 200 / 3, y: 24, w: 100 / 3, h: 76, type: "menu" },
+    ],
+  },
+  {
+    id: "quad-columns",
+    label: "4 columns",
+    orientation: "landscape",
+    zones: [
+      { x: 0, y: 0, w: 25, h: 100, type: "menu" },
+      { x: 25, y: 0, w: 25, h: 100, type: "menu" },
+      { x: 50, y: 0, w: 25, h: 100, type: "menu" },
+      { x: 75, y: 0, w: 25, h: 100, type: "menu" },
+    ],
+  },
+  {
     id: "grid-2x2",
     label: "2×2 grid",
     orientation: "landscape",
@@ -151,6 +193,47 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
     zones: [
       { x: 0, y: 0, w: 100, h: 50, type: "menu" },
       { x: 0, y: 50, w: 100, h: 50, type: "menu" },
+    ],
+  },
+  {
+    id: "thirds-tb-p",
+    label: "3 rows",
+    orientation: "portrait",
+    zones: [
+      { x: 0, y: 0, w: 100, h: 100 / 3, type: "menu" },
+      { x: 0, y: 100 / 3, w: 100, h: 100 / 3, type: "menu" },
+      { x: 0, y: 200 / 3, w: 100, h: 100 / 3, type: "menu" },
+    ],
+  },
+  {
+    id: "media-top-2menu-p",
+    label: "Image top + 2 menus",
+    orientation: "portrait",
+    zones: [
+      { x: 0, y: 0, w: 100, h: 30, type: "image" },
+      { x: 0, y: 30, w: 100, h: 35, type: "menu" },
+      { x: 0, y: 65, w: 100, h: 35, type: "menu" },
+    ],
+  },
+  {
+    id: "quad-rows-p",
+    label: "4 rows",
+    orientation: "portrait",
+    zones: [
+      { x: 0, y: 0, w: 100, h: 25, type: "menu" },
+      { x: 0, y: 25, w: 100, h: 25, type: "menu" },
+      { x: 0, y: 50, w: 100, h: 25, type: "menu" },
+      { x: 0, y: 75, w: 100, h: 25, type: "menu" },
+    ],
+  },
+  {
+    id: "video-top-grid-p",
+    label: "Video top + 2×1 menus",
+    orientation: "portrait",
+    zones: [
+      { x: 0, y: 0, w: 100, h: 34, type: "video" },
+      { x: 0, y: 34, w: 50, h: 66, type: "menu" },
+      { x: 50, y: 34, w: 50, h: 66, type: "menu" },
     ],
   },
 ];
