@@ -118,6 +118,19 @@ export function LayoutEditorPanel({
 
   const sel = zones.find((z) => z.id === selected) ?? null;
 
+  // A category may only live in one menu/featured block. Collect the ones
+  // already claimed by *other* blocks so we can disable them here.
+  const usedElsewhere = useMemo(() => {
+    const m = new Map<string, string>(); // categoryId -> owning zone id
+    for (const z of zones) {
+      if (z.id === selected) continue;
+      if (z.type === "menu" || z.type === "featured") {
+        for (const c of z.categoryIds) m.set(c, z.id);
+      }
+    }
+    return m;
+  }, [zones, selected]);
+
   return (
     <div className="space-y-4">
       <div className="space-y-2">
@@ -196,18 +209,35 @@ export function LayoutEditorPanel({
                     {categories.length === 0 && (
                       <li className="text-sm text-muted-foreground">No categories yet.</li>
                     )}
-                    {categories.map((c) => (
-                      <li key={c.id}>
-                        <label className="flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={sel.categoryIds.includes(c.id)}
-                            onChange={() => toggleCat(sel.id, c.id)}
-                          />
-                          {c.name}
-                        </label>
-                      </li>
-                    ))}
+                    {categories.map((c) => {
+                      const takenBy = usedElsewhere.get(c.id);
+                      const disabled =
+                        !!takenBy && !sel.categoryIds.includes(c.id);
+                      return (
+                        <li key={c.id}>
+                          <label
+                            className={`flex items-center gap-2 text-sm ${
+                              disabled
+                                ? "cursor-not-allowed text-muted-foreground"
+                                : ""
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              disabled={disabled}
+                              checked={sel.categoryIds.includes(c.id)}
+                              onChange={() => toggleCat(sel.id, c.id)}
+                            />
+                            {c.name}
+                            {disabled && (
+                              <span className="text-xs italic opacity-70">
+                                in another block
+                              </span>
+                            )}
+                          </label>
+                        </li>
+                      );
+                    })}
                     {sel.type === "featured" && (
                       <li className="pt-1 text-xs text-muted-foreground">
                         Shows the “featured” items (with photos) from the picked categories.
