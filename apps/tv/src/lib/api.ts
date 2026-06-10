@@ -67,11 +67,13 @@ export async function fetchDeviceContent(
   return res.json();
 }
 
-/** Report the display's pixel resolution (drives the editor preview). */
+/** Report the display's pixel resolution + pixel ratio (drives the editor
+ *  preview, which scales to layout-space dp = px / scale). */
 export async function reportResolution(
   deviceToken: string,
   width: number,
   height: number,
+  scale: number,
 ): Promise<void> {
   await fetch(`${API_URL}/devices/resolution`, {
     method: "POST",
@@ -79,6 +81,6 @@ export async function reportResolution(
       "Content-Type": "application/json",
       Authorization: `Bearer ${deviceToken}`,
     },
-    body: JSON.stringify({ width, height }),
+    body: JSON.stringify({ width, height, scale }),
   }).catch(() => {});
 }
