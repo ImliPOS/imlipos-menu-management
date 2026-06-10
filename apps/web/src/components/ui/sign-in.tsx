@@ -1,7 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { Eye, EyeOff, Check, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  passwordRequirements,
+  passwordScore,
+  strengthColor,
+  strengthText,
+} from "@/lib/password";
 
 // --- TYPES ---
 export interface Testimonial {
@@ -11,9 +18,19 @@ export interface Testimonial {
   text: string;
 }
 
+export interface AuthValues {
+  email: string;
+  password: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+}
+
 interface AuthPanelProps {
   title?: React.ReactNode;
   description?: React.ReactNode;
+  /** "signin" (default) or "signup" — signup adds name/phone/confirm fields. */
+  mode?: "signin" | "signup";
   /** Path to a video used as the hero (right column). */
   heroVideoSrc?: string;
   testimonials?: Testimonial[];
@@ -26,7 +43,7 @@ interface AuthPanelProps {
   footerPrompt: string;
   footerActionLabel: string;
   onFooterAction: () => void;
-  onSubmit: (values: { email: string; password: string }) => void;
+  onSubmit: (values: AuthValues) => void;
 }
 
 const GlassInputWrapper = ({ children }: { children: React.ReactNode }) => (
@@ -61,6 +78,7 @@ const TestimonialCard = ({
 export const AuthPanel: React.FC<AuthPanelProps> = ({
   title,
   description,
+  mode = "signin",
   heroVideoSrc,
   testimonials = [],
   submitLabel,
@@ -72,13 +90,54 @@ export const AuthPanel: React.FC<AuthPanelProps> = ({
   onFooterAction,
   onSubmit,
 }) => {
+  const isSignup = mode === "signup";
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const strength = passwordRequirements.map((r) => ({
+    met: r.regex.test(password),
+    text: r.text,
+  }));
+  const score = useMemo(() => passwordScore(password), [password]);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    onSubmit({ email, password });
+    setFormError(null);
+
+    if (!isSignup) {
+      onSubmit({ email, password });
+      return;
+    }
+
+    if (!firstName.trim() || !lastName.trim()) {
+      return setFormError("Please enter your first and last name.");
+    }
+    if (!phone.trim()) {
+      return setFormError("Please enter your phone number.");
+    }
+    if (!email.trim()) {
+      return setFormError("Please enter your email address.");
+    }
+    if (score < passwordRequirements.length) {
+      return setFormError("Password doesn't meet all requirements.");
+    }
+    if (password !== confirmPassword) {
+      return setFormError("Passwords don't match.");
+    }
+
+    onSubmit({
+      email,
+      password,
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      phone: phone.trim(),
+    });
   }
 
   return (
@@ -95,6 +154,62 @@ export const AuthPanel: React.FC<AuthPanelProps> = ({
             </p>
 
             <form className="space-y-5" onSubmit={handleSubmit}>
+              {isSignup && (
+                <>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="animate-element animate-delay-300">
+                      <label className="text-sm font-medium text-muted-foreground">
+                        First name
+                      </label>
+                      <GlassInputWrapper>
+                        <input
+                          name="firstName"
+                          type="text"
+                          autoComplete="given-name"
+                          value={firstName}
+                          onChange={(e) => setFirstName(e.target.value)}
+                          placeholder="John"
+                          className="w-full rounded-2xl bg-transparent p-4 text-sm focus:outline-none"
+                        />
+                      </GlassInputWrapper>
+                    </div>
+                    <div className="animate-element animate-delay-300">
+                      <label className="text-sm font-medium text-muted-foreground">
+                        Last name
+                      </label>
+                      <GlassInputWrapper>
+                        <input
+                          name="lastName"
+                          type="text"
+                          autoComplete="family-name"
+                          value={lastName}
+                          onChange={(e) => setLastName(e.target.value)}
+                          placeholder="Doe"
+                          className="w-full rounded-2xl bg-transparent p-4 text-sm focus:outline-none"
+                        />
+                      </GlassInputWrapper>
+                    </div>
+                  </div>
+
+                  <div className="animate-element animate-delay-300">
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Phone number
+                    </label>
+                    <GlassInputWrapper>
+                      <input
+                        name="phone"
+                        type="tel"
+                        autoComplete="tel"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="+91 98765 43210"
+                        className="w-full rounded-2xl bg-transparent p-4 text-sm focus:outline-none"
+                      />
+                    </GlassInputWrapper>
+                  </div>
+                </>
+              )}
+
               <div className="animate-element animate-delay-300">
                 <label className="text-sm font-medium text-muted-foreground">
                   Email address
@@ -140,8 +255,67 @@ export const AuthPanel: React.FC<AuthPanelProps> = ({
                     </button>
                   </div>
                 </GlassInputWrapper>
+
+                {isSignup && (
+                  <>
+                    <div className="mt-3 flex h-1 w-full gap-1">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <span
+                          key={i}
+                          className={cn(
+                            "h-full flex-1 rounded-full transition-all",
+                            i < score ? strengthColor(score) : "bg-border",
+                          )}
+                        />
+                      ))}
+                    </div>
+                    <p className="mt-2 text-sm font-medium">
+                      {strengthText(score)}. Must contain:
+                    </p>
+                    <ul className="mt-1 space-y-1">
+                      {strength.map((req, i) => (
+                        <li key={i} className="flex items-center gap-2">
+                          {req.met ? (
+                            <Check className="h-4 w-4 text-green-400" />
+                          ) : (
+                            <X className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          <span
+                            className={cn(
+                              "text-xs",
+                              req.met ? "text-green-400" : "text-muted-foreground",
+                            )}
+                          >
+                            {req.text}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
               </div>
 
+              {isSignup && (
+                <div className="animate-element animate-delay-400">
+                  <label className="text-sm font-medium text-muted-foreground">
+                    Confirm password
+                  </label>
+                  <GlassInputWrapper>
+                    <input
+                      name="confirmPassword"
+                      type={showPassword ? "text" : "password"}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Re-enter your password"
+                      className="w-full rounded-2xl bg-transparent p-4 text-sm focus:outline-none"
+                    />
+                  </GlassInputWrapper>
+                </div>
+              )}
+
+              {formError && (
+                <p className="animate-element text-sm text-red-400">{formError}</p>
+              )}
               {error && (
                 <p className="animate-element text-sm text-red-400">{error}</p>
               )}
