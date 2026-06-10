@@ -27,9 +27,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-const field =
-  "h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring";
-
 const isOnline = (d: Device) =>
   d.lastSeenAt ? Date.now() - new Date(d.lastSeenAt).getTime() < 90_000 : false;
 
@@ -74,7 +71,7 @@ export default function PairDevice() {
             live
           </span>
         </div>
-        <PairDeviceDialog screens={screens} onPaired={loadDevices} />
+        <PairDeviceDialog onPaired={loadDevices} />
       </div>
 
       {paired.length === 0 ? (
@@ -96,16 +93,9 @@ export default function PairDevice() {
   );
 }
 
-function PairDeviceDialog({
-  screens,
-  onPaired,
-}: {
-  screens: Screen[];
-  onPaired: () => void;
-}) {
+function PairDeviceDialog({ onPaired }: { onPaired: () => void }) {
   const [open, setOpen] = useState(false);
   const [pairingCode, setPairingCode] = useState("");
-  const [screenId, setScreenId] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -115,10 +105,9 @@ function PairDeviceDialog({
     setError(null);
     setBusy(true);
     try {
-      await api.pairDevice({ pairingCode, screenId, name: name.trim() });
+      await api.pairDevice({ pairingCode, name: name.trim() });
       onPaired();
       setPairingCode("");
-      setScreenId("");
       setName("");
       setOpen(false);
     } catch {
@@ -140,8 +129,8 @@ function PairDeviceDialog({
         <DialogHeader>
           <DialogTitle>Pair a Display</DialogTitle>
           <DialogDescription>
-            Enter the 6-digit code shown on the display, name it, and pick the screen
-            it should show.
+            Enter the 6-digit code shown on the display and give it a name. You can
+            customise its layout after pairing.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="mt-2 space-y-4">
@@ -180,22 +169,6 @@ function PairDeviceDialog({
               Enter the 6-digit code shown on the display.
             </p>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="screen">Screen</Label>
-            <select
-              id="screen"
-              className={field}
-              value={screenId}
-              onChange={(e) => setScreenId(e.target.value)}
-            >
-              <option value="">Choose a screen…</option>
-              {screens.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
           {error && <p className="text-sm text-red-400">{error}</p>}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
@@ -203,7 +176,7 @@ function PairDeviceDialog({
             </Button>
             <Button
               type="submit"
-              disabled={busy || pairingCode.length !== 6 || !screenId || !name.trim()}
+              disabled={busy || pairingCode.length !== 6 || !name.trim()}
             >
               {busy ? "Pairing…" : "Pair display"}
             </Button>

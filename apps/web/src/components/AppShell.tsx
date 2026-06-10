@@ -6,7 +6,6 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Tags,
   BookOpen,
-  MonitorPlay,
   QrCode,
   User,
   LogOut,
@@ -38,9 +37,8 @@ const NAV: { group: string; items: NavItem[] }[] = [
     ],
   },
   {
-    group: "Orientation & Pairing",
+    group: "Displays",
     items: [
-      { href: "/screens", label: "Screens", icon: MonitorPlay },
       { href: "/screens/pair", label: "Pair a Display", icon: QrCode },
     ],
   },
@@ -49,7 +47,6 @@ const NAV: { group: string; items: NavItem[] }[] = [
 const TITLES: Record<string, string> = {
   "/categories": "Category",
   "/menu": "Menu",
-  "/screens": "Screens",
   "/screens/pair": "Pair a Display",
   "/profile": "Profile",
 };

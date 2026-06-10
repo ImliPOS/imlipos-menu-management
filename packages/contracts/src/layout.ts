@@ -29,10 +29,13 @@ export const deviceLayout = z.object({
 });
 export type DeviceLayout = z.infer<typeof deviceLayout>;
 
-/** Device-reported screen resolution. */
+/** Device-reported screen resolution (width/height in physical pixels) plus the
+ *  device pixel ratio, so layout-space (dp) can be derived: dp = px / scale.
+ *  The TV lays out fonts/padding in dp, so the editor preview must scale to dp. */
 export const resolution = z.object({
   width: z.number().int().positive(),
   height: z.number().int().positive(),
+  scale: z.number().positive().optional(),
 });
 export type Resolution = z.infer<typeof resolution>;
 export const reportResolutionSchema = resolution;
@@ -240,3 +243,135 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
     ],
   },
 ];
+
+/** ---- Auto-pagination: flow categories + items into screen-sized pages ----
+ *  When a menu block's content doesn't all fit, the TV (and the editor preview)
+ *  page through it, cycling every few seconds. Both use this same pure function
+ *  so the preview matches the display exactly. */
+export interface MenuPageItem {
+  id: string;
+  name: string;
+  price: number;
+}
+export interface MenuPageCategory {
+  id: string;
+  name: string;
+  items: MenuPageItem[];
+  /** True when this is a continuation of a category split across pages. */
+  continued: boolean;
+}
+export type MenuPage = MenuPageCategory[];
+
+/** Result of laying out a menu block. Leading categories that fully fit are
+ *  "pinned" — shown statically on every page — while the first overflowing
+ *  category and everything after it cycle through `pages`. */
+export interface MenuLayout {
+  /** Categories pinned to the top of every page (rendered without animation). */
+  fixed: MenuPage;
+  /** Pages of the overflowing tail that cycle. Empty when everything fit in
+   *  `fixed`; a single page means no cycling. */
+  pages: MenuPage[];
+}
+
+export interface PaginateCategory {
+  id: string;
+  name: string;
+  items: MenuPageItem[];
+}
+
+/** dp heights matching the TV menu styles: a category title block (fontSize 34,
+ *  lineHeight 42, marginBottom 12 = 54), an item row (paddingVertical 8×2 +
+ *  lineHeight 32 = 48), and the gap below each category (28).
+ *
+ *  `safeBottom` is dead space reserved at the bottom of every block before
+ *  paginating, so a panel's navigation/gesture bar, rounded bezel, or border
+ *  can't clip the last row. One item-row's worth keeps the layout clean across
+ *  every template. */
+export const MENU_METRICS = { titleH: 54, itemH: 48, catGap: 28, safeBottom: 48 };
+
+/** Lay out a menu block into a static prefix + a cycling tail.
+ *
+ *  Leading categories that fully fit (stacked together) are *pinned*: they stay
+ *  on top of every page so they read as static. The first category that doesn't
+ *  fully fit — and everything after it — flows into `pages`, which cycle through
+ *  the height left below the pinned region. This way, in a block holding a
+ *  category that fits (e.g. "Main Course") next to one that overflows (e.g.
+ *  "North Indian"), only the overflowing one animates while the rest stays put.
+ */
+export function paginateMenu(
+  cats: PaginateCategory[],
+  innerHeight: number,
+  m: { titleH: number; itemH: number; catGap: number; safeBottom?: number } = MENU_METRICS,
+): MenuLayout {
+  const nonEmpty = cats.filter((c) => c.items.length > 0);
+
+  // Reserve dead space at the bottom so a panel's nav bar / bezel can't clip the
+  // last row. Everything below paginates against this reduced usable height.
+  const usable = Math.max(innerHeight - (m.safeBottom ?? 0), m.itemH);
+
+  // Greedily pin leading categories whose whole height fits below the ones
+  // already pinned. Stop at the first that doesn't — it begins the cycling tail.
+  const fixed: MenuPage = [];
+  let fixedUsed = 0;
+  let i = 0;
+  for (; i < nonEmpty.length; i++) {
+    const cat = nonEmpty[i]!;
+    const need = m.titleH + cat.items.length * m.itemH + m.catGap;
+    if (fixedUsed + need > usable) break;
+    fixed.push({ id: cat.id, name: cat.name, items: cat.items, continued: false });
+    fixedUsed += need;
+  }
+
+  const rest = nonEmpty.slice(i);
+  if (rest.length === 0) return { fixed, pages: [] };
+
+  // Flow the overflowing tail into the leftover height (fall back to the full
+  // usable height when the pinned region somehow leaves nothing — keeps progress).
+  const tailHeight = usable - fixedUsed;
+  return { fixed, pages: flowPages(rest, tailHeight > m.itemH ? tailHeight : usable, m) };
+}
+
+/** Split categories+items into pages each fitting `innerHeight` dp (the zone's
+ *  content area, inside its padding). A category that overflows continues on the
+ *  next page with its header repeated. Always returns ≥1 page. */
+function flowPages(
+  cats: PaginateCategory[],
+  innerHeight: number,
+  m: { titleH: number; itemH: number; catGap: number },
+): MenuPage[] {
+  const pages: MenuPage[] = [];
+  let page: MenuPage = [];
+  let used = 0;
+  const flush = () => {
+    pages.push(page);
+    page = [];
+    used = 0;
+  };
+
+  for (const cat of cats) {
+    if (cat.items.length === 0) continue;
+    let idx = 0;
+    let continued = false;
+    do {
+      // Wrap before a header that can't fit with at least one item.
+      if (used > 0 && used + m.titleH + m.itemH > innerHeight) flush();
+      const pc: MenuPageCategory = { id: cat.id, name: cat.name, items: [], continued };
+      used += m.titleH;
+      // Always place ≥1 item (guarantees progress), then as many as fit.
+      while (
+        idx < cat.items.length &&
+        (pc.items.length === 0 || used + m.itemH <= innerHeight)
+      ) {
+        pc.items.push(cat.items[idx]!);
+        idx += 1;
+        used += m.itemH;
+      }
+      page.push(pc);
+      used += m.catGap;
+      continued = true;
+      if (idx < cat.items.length) flush();
+    } while (idx < cat.items.length);
+  }
+  if (page.length) pages.push(page);
+  return pages.length ? pages : [[]];
+}

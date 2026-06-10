@@ -89,21 +89,15 @@ devicesRouter.get("/:id/status", async (req, res) => {
 });
 
 /**
- * Step 2 — Owner claims a device (AUTHENTICATED) by entering the code +
- * choosing a screen. Binds the device to the owner's shop.
+ * Step 2 — Owner claims a device (AUTHENTICATED) by entering the code + naming
+ * it. A screen is auto-created for the display (screens are no longer managed
+ * directly); `screenId` is optional, only for binding to an existing screen.
  */
 devicesRouter.post("/pair", requireOwner, async (req, res) => {
   const parsed = pairDeviceSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json(parsed.error.flatten());
 
-  // Screen must belong to this owner.
-  const [screen] = await db
-    .select({ id: screens.id })
-    .from(screens)
-    .where(and(eq(screens.id, parsed.data.screenId), eq(screens.shopId, shopId(req))))
-    .limit(1);
-  if (!screen) return res.status(404).json({ error: "Screen not found" });
-
+  // Validate the code first so an invalid pairing never leaves an orphan screen.
   const [device] = await db
     .select()
     .from(devices)
@@ -117,11 +111,30 @@ devicesRouter.post("/pair", requireOwner, async (req, res) => {
     .limit(1);
   if (!device) return res.status(404).json({ error: "Invalid or expired code" });
 
+  // Resolve the screen to bind: an existing owner-owned screen, or a freshly
+  // auto-created one for this display (the default flow).
+  let screenId: string;
+  if (parsed.data.screenId) {
+    const [screen] = await db
+      .select({ id: screens.id })
+      .from(screens)
+      .where(and(eq(screens.id, parsed.data.screenId), eq(screens.shopId, shopId(req))))
+      .limit(1);
+    if (!screen) return res.status(404).json({ error: "Screen not found" });
+    screenId = screen.id;
+  } else {
+    const [created] = await db
+      .insert(screens)
+      .values({ shopId: shopId(req), name: parsed.data.name, orientation: "landscape" })
+      .returning({ id: screens.id });
+    screenId = created!.id;
+  }
+
   await db
     .update(devices)
     .set({
       shopId: shopId(req),
-      screenId: parsed.data.screenId,
+      screenId,
       name: parsed.data.name,
       status: "active",
       pairingCode: null,
@@ -141,6 +154,7 @@ devicesRouter.get("/", requireOwner, async (req, res) => {
       name: devices.name,
       screenWidth: devices.screenWidth,
       screenHeight: devices.screenHeight,
+      screenScale: devices.screenScale,
       layout: devices.layout,
       status: devices.status,
       lastSeenAt: devices.lastSeenAt,
@@ -156,7 +170,11 @@ devicesRouter.get("/", requireOwner, async (req, res) => {
       name: r.name,
       resolution:
         r.screenWidth && r.screenHeight
-          ? { width: r.screenWidth, height: r.screenHeight }
+          ? {
+              width: r.screenWidth,
+              height: r.screenHeight,
+              scale: r.screenScale ?? undefined,
+            }
           : null,
       layout: r.layout ?? null,
       status: r.status,
@@ -224,7 +242,11 @@ devicesRouter.post("/resolution", requireDevice, async (req, res) => {
   if (!parsed.success) return res.status(400).json(parsed.error.flatten());
   await db
     .update(devices)
-    .set({ screenWidth: parsed.data.width, screenHeight: parsed.data.height })
+    .set({
+      screenWidth: parsed.data.width,
+      screenHeight: parsed.data.height,
+      screenScale: parsed.data.scale ?? null,
+    })
     .where(eq(devices.id, req.device!.sub));
   res.json({ ok: true });
 });

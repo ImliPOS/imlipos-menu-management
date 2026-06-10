@@ -36,6 +36,13 @@
       "when": 1780382448991,
       "tag": "0004_magical_whistler",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1780917890793,
+      "tag": "0005_normal_daredevil",
+      "breakpoints": true
     }
   ]
 }

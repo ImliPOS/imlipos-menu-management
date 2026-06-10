@@ -16,9 +16,6 @@
       "translucent": true,
       "backgroundColor": "#00000000"
     },
-    "androidNavigationBar": {
-      "visible": "immersive"
-    },
     "plugins": [
       [
         "expo-build-properties",

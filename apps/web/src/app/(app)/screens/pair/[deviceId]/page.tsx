@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Trash2Icon } from "lucide-react";
-import type { Device, Screen } from "@imlipos/contracts";
+import type { Device, Orientation, Screen } from "@imlipos/contracts";
 import { api } from "@/lib/api";
 import { PageSpinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -67,6 +67,12 @@ export default function DeviceDetail() {
     router.replace("/screens/pair");
   }
 
+  async function setOrientation(orientation: Orientation) {
+    if (!screen || screen.orientation === orientation) return;
+    await api.updateScreen(screen.id, { orientation });
+    await load();
+  }
+
   return (
     <div className="mx-auto max-w-5xl p-8">
       <Link
@@ -123,8 +129,13 @@ export default function DeviceDetail() {
 
       {/* Details */}
       <section className="mb-10 grid grid-cols-2 gap-x-8 gap-y-3 rounded-xl border border-border bg-card p-6 text-sm sm:grid-cols-3">
-        <Detail label="Screen">{screen?.name ?? "—"}</Detail>
-        <Detail label="Orientation">{screen?.orientation ?? "—"}</Detail>
+        <Detail label="Orientation">
+          {screen ? (
+            <OrientationToggle value={screen.orientation} onChange={setOrientation} />
+          ) : (
+            "—"
+          )}
+        </Detail>
         <Detail label="Resolution">
           {device.resolution
             ? `${device.resolution.width}×${device.resolution.height}`
@@ -148,6 +159,33 @@ export default function DeviceDetail() {
         orientation={screen?.orientation}
         onSaved={load}
       />
+    </div>
+  );
+}
+
+function OrientationToggle({
+  value,
+  onChange,
+}: {
+  value: Orientation;
+  onChange: (o: Orientation) => void;
+}) {
+  return (
+    <div className="mt-0.5 inline-flex rounded-md border border-border p-0.5">
+      {(["landscape", "portrait"] as const).map((o) => (
+        <button
+          key={o}
+          type="button"
+          onClick={() => onChange(o)}
+          className={`rounded px-2 py-0.5 text-xs capitalize transition-colors ${
+            value === o
+              ? "bg-secondary text-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {o}
+        </button>
+      ))}
     </div>
   );
 }

@@ -42,11 +42,12 @@ export type RegisterDeviceResponse = z.infer<typeof registerDeviceResponse>;
 
 /**
  * Step 2 — Owner claims the device (authenticated with owner JWT) by entering
- * the code and choosing a screen.
+ * the code and naming it. A screen is auto-created for the display on pair;
+ * `screenId` is optional and only sent when binding to an existing screen.
  */
 export const pairDeviceSchema = z.object({
   pairingCode: z.string().regex(/^\d{6}$/),
-  screenId: z.string().uuid(),
+  screenId: z.string().uuid().optional(),
   name: z.string().min(1).max(120),
 });
 export type PairDeviceInput = z.infer<typeof pairDeviceSchema>;

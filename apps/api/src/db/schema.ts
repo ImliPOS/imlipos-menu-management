@@ -3,6 +3,7 @@ import {
   uuid,
   text,
   integer,
+  real,
   boolean,
   timestamp,
   numeric,
@@ -144,6 +145,7 @@ export const devices = pgTable(
     name: text("name"),
     screenWidth: integer("screen_width"),
     screenHeight: integer("screen_height"),
+    screenScale: real("screen_scale"), // device pixel ratio (dp = px / scale)
     layout: jsonb("layout").$type<DeviceLayout>(),
     hardwareId: text("hardware_id").notNull(),
     pairingCode: text("pairing_code"),
