@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Animated,
   Dimensions,
   PixelRatio,
   Pressable,
@@ -12,8 +13,15 @@ import {
   type ViewStyle,
 } from "react-native";
 import { Image } from "expo-image";
-import { Video, ResizeMode } from "expo-av";
-import type { DeviceContent, ResolvedZone } from "@imlipos/contracts";
+import { useVideoPlayer, VideoView } from "expo-video";
+import * as ScreenOrientation from "expo-screen-orientation";
+import { MENU_METRICS, paginateMenu } from "@imlipos/contracts";
+import type {
+  DeviceContent,
+  MenuCategoryView,
+  MenuPageCategory,
+  ResolvedZone,
+} from "@imlipos/contracts";
 import {
   fetchDeviceContent,
   heartbeat,
@@ -95,7 +103,12 @@ export function MenuScreen({
     // Report resolution once (pixels).
     const { width, height } = Dimensions.get("screen");
     const scale = PixelRatio.get();
-    reportResolution(deviceToken, Math.round(width * scale), Math.round(height * scale));
+    reportResolution(
+      deviceToken,
+      Math.round(width * scale),
+      Math.round(height * scale),
+      scale,
+    );
 
     socketRef.current = connectSocket(deviceToken, screenId, {
       onItemUpdated: () => refresh(),
@@ -117,10 +130,46 @@ export function MenuScreen({
     };
   }, [deviceToken, screenId, refresh, unpair]);
 
+  // Lock the panel to the display's configured orientation so a tablet's sensor
+  // (e.g. lying flat on a table, where the OS reverts to portrait) can't flip
+  // it. On fixed panels that can't rotate (a landscape TV mounted in portrait)
+  // the lock is a no-op and the canvas-rotation fallback below still applies.
+  const configuredOrientation = content?.orientation;
+  useEffect(() => {
+    if (!configuredOrientation) return;
+    const lock =
+      configuredOrientation === "portrait"
+        ? ScreenOrientation.OrientationLock.PORTRAIT_UP
+        : ScreenOrientation.OrientationLock.LANDSCAPE;
+    ScreenOrientation.lockAsync(lock).catch(() => {});
+  }, [configuredOrientation]);
+
   if (!content)
     return (
       <Pressable onLongPress={confirmReset} delayLongPress={2000} style={styles.root}>
         <Text style={styles.dim}>Loading…</Text>
+      </Pressable>
+    );
+
+  // Paired but nothing configured yet (no layout / no available items). Show a
+  // friendly "active" state instead of a blank screen, prompting the operator
+  // to set up the layout from the admin.
+  const hasContent = content.zones.some((z) => {
+    if (z.type === "image" || z.type === "video") return !!z.mediaUrl;
+    return (z.categories ?? []).some(
+      (c) => c.isAvailable && c.items.some((i) => i.isAvailable),
+    );
+  });
+  if (!hasContent)
+    return (
+      <Pressable onLongPress={confirmReset} delayLongPress={2000} style={styles.root}>
+        <View style={styles.activeWrap}>
+          <View style={styles.activeDot} />
+          <Text style={styles.activeTitle}>Display active</Text>
+          <Text style={styles.activeSubtitle}>
+            Start customising your layout for the display.
+          </Text>
+        </View>
       </Pressable>
     );
 
@@ -153,13 +202,16 @@ export function MenuScreen({
         {content.zones.map((z) => (
           <View
             key={z.id}
-            style={{
-              position: "absolute",
-              left: `${z.x}%`,
-              top: `${z.y}%`,
-              width: `${z.w}%`,
-              height: `${z.h}%`,
-            }}
+            style={[
+              {
+                position: "absolute",
+                left: `${z.x}%`,
+                top: `${z.y}%`,
+                width: `${z.w}%`,
+                height: `${z.h}%`,
+              },
+              menuDivider(z, content.zones),
+            ]}
           >
             <Zone zone={z} />
           </View>
@@ -186,14 +238,7 @@ function Zone({ zone }: { zone: ResolvedZone }) {
 
   if (zone.type === "video") {
     return zone.mediaUrl ? (
-      <Video
-        source={{ uri: zone.mediaUrl }}
-        style={styles.fill}
-        resizeMode={ResizeMode.COVER}
-        isLooping
-        shouldPlay
-        isMuted
-      />
+      <VideoZone uri={zone.mediaUrl} />
     ) : (
       <View style={styles.placeholder} />
     );
@@ -226,19 +271,145 @@ function Zone({ zone }: { zone: ResolvedZone }) {
   const cats = (zone.categories ?? []).filter(
     (c) => c.isAvailable && c.items.some((i) => i.isAvailable),
   );
+  return <PagedMenu cats={cats} />;
+}
+
+// Two menu blocks sitting edge-to-edge read as one continuous menu. Draw a
+// clear divider on a menu zone's right/bottom edge when the block touching it
+// there is *also* a menu. Each shared edge is "owned" by the left/top zone, so
+// the line is drawn exactly once (never against image/video blocks).
+const DIVIDER_W = 2;
+const DIVIDER_COLOR = "#52525b";
+function menuDivider(zone: ResolvedZone, zones: ResolvedZone[]): ViewStyle | null {
+  if (zone.type !== "menu") return null;
+  const EPS = 0.5; // percentage tolerance for "touching" edges
+  const aRight = zone.x + zone.w;
+  const aBottom = zone.y + zone.h;
+  let borderRightWidth = 0;
+  let borderBottomWidth = 0;
+  for (const b of zones) {
+    if (b === zone || b.type !== "menu") continue;
+    const vOverlap = Math.min(aBottom, b.y + b.h) - Math.max(zone.y, b.y) > EPS;
+    const hOverlap = Math.min(aRight, b.x + b.w) - Math.max(zone.x, b.x) > EPS;
+    if (vOverlap && Math.abs(aRight - b.x) < EPS) borderRightWidth = DIVIDER_W;
+    if (hOverlap && Math.abs(aBottom - b.y) < EPS) borderBottomWidth = DIVIDER_W;
+  }
+  if (!borderRightWidth && !borderBottomWidth) return null;
+  return { borderColor: DIVIDER_COLOR, borderRightWidth, borderBottomWidth };
+}
+
+// Looping, muted, auto-playing background video. expo-av's <Video> was removed
+// from Expo Go (SDK 54+); expo-video is the supported replacement.
+function VideoZone({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri, (p) => {
+    p.loop = true;
+    p.muted = true;
+    p.play();
+  });
   return (
-    <View style={styles.zonePad}>
-      {cats.map((cat) => (
-        <View key={cat.id} style={styles.category}>
-          <Text style={styles.catTitle}>{cat.name}</Text>
-          {cat.items
-            .filter((it) => it.isAvailable)
-            .map((it) => (
-              <View key={it.id} style={styles.row}>
-                <Text style={styles.item}>{it.name}</Text>
-                <Text style={styles.price}>₹{it.price}</Text>
-              </View>
+    <VideoView
+      style={styles.fill}
+      player={player}
+      contentFit="cover"
+      nativeControls={false}
+      allowsPictureInPicture={false}
+    />
+  );
+}
+
+// Renders a menu block. Categories that fully fit are pinned statically at the
+// top; the first one that overflows (and anything after it) auto-pages through
+// the leftover space, sliding the next page in from the left every 5s, so every
+// item is shown over time while the pinned categories stay put. Layout comes
+// from the shared paginateMenu so the editor preview matches exactly.
+const PAGE_INTERVAL_MS = 5000;
+function PagedMenu({ cats }: { cats: MenuCategoryView[] }) {
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  const [page, setPage] = useState(0);
+  const x = useRef(new Animated.Value(0)).current;
+
+  const { fixed, pages } = useMemo(() => {
+    const simple = cats.map((c) => ({
+      id: c.id,
+      name: c.name,
+      items: c.items
+        .filter((i) => i.isAvailable)
+        .map((i) => ({ id: i.id, name: i.name, price: i.price })),
+    }));
+    if (size.h <= 0)
+      return { fixed: simple.map((c) => ({ ...c, continued: false })), pages: [] };
+    return paginateMenu(simple, size.h, MENU_METRICS);
+  }, [cats, size.h]);
+
+  const pageCount = pages.length;
+  const current = pageCount > 0 ? pages[Math.min(page, pageCount - 1)]! : [];
+
+  useEffect(() => {
+    setPage(0);
+  }, [pageCount]);
+
+  // Advance every interval — only when there's more than one page.
+  useEffect(() => {
+    if (pageCount <= 1) return;
+    const id = setInterval(() => setPage((p) => (p + 1) % pageCount), PAGE_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [pageCount]);
+
+  // Slide the new page in from the left edge → content flows left-to-right.
+  useEffect(() => {
+    if (pageCount <= 1) {
+      x.setValue(0);
+      return;
+    }
+    x.setValue(-(size.w || 300));
+    Animated.timing(x, { toValue: 0, duration: 600, useNativeDriver: true }).start();
+  }, [page, size.w, pageCount, x]);
+
+  return (
+    <View
+      style={styles.zonePad}
+      onLayout={(e) => {
+        // Content area = the zone minus its 32dp padding on each side.
+        const w = e.nativeEvent.layout.width - 64;
+        const h = e.nativeEvent.layout.height - 64;
+        setSize((s) => (s.w === w && s.h === h ? s : { w, h }));
+      }}
+    >
+      {/* Pinned categories — static, never animated. */}
+      {fixed.map((pc) => (
+        <MenuCategoryRows key={pc.id} pc={pc} />
+      ))}
+      {/* Overflowing tail — slides a new page in from the left each interval. */}
+      {pageCount > 0 && (
+        <View style={styles.pagedViewport}>
+          <Animated.View style={{ transform: [{ translateX: x }] }}>
+            {current.map((pc) => (
+              <MenuCategoryRows key={`${pc.id}${pc.continued ? "-c" : ""}`} pc={pc} />
             ))}
+          </Animated.View>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function MenuCategoryRows({ pc }: { pc: MenuPageCategory }) {
+  return (
+    <View style={styles.category}>
+      <Text style={styles.catTitle} numberOfLines={1}>
+        {pc.name}
+      </Text>
+      {pc.items.map((it) => (
+        <View key={it.id} style={styles.row}>
+          {/* Single-line, ellipsised — a wrapped name would make the row taller
+              than MENU_METRICS.itemH and the metric-based pagination would then
+              overflow the zone, clipping the bottom rows on the real display. */}
+          <Text style={styles.item} numberOfLines={1}>
+            {it.name}
+          </Text>
+          <Text style={styles.price} numberOfLines={1}>
+            ₹{it.price}
+          </Text>
         </View>
       ))}
     </View>
@@ -252,12 +423,32 @@ const styles = StyleSheet.create({
   placeholder: { width: "100%", height: "100%", backgroundColor: "#161616" },
   dim: { color: "#888", fontSize: 28, padding: 48 },
 
+  activeWrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: 48 },
+  activeDot: { width: 14, height: 14, borderRadius: 7, backgroundColor: "#22c55e", marginBottom: 20 },
+  activeTitle: { color: "#fff", fontSize: 48, fontWeight: "800", marginBottom: 12 },
+  activeSubtitle: { color: "#9ca3af", fontSize: 24, textAlign: "center" },
+
   zonePad: { flex: 1, padding: 32 },
   category: { marginBottom: 28 },
-  catTitle: { color: "#f5d90a", fontSize: 34, fontWeight: "800", marginBottom: 12 },
-  row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 8 },
-  item: { color: "#fff", fontSize: 26 },
-  price: { color: "#fff", fontSize: 26, fontWeight: "700" },
+  // Clips the sliding page during the paged-menu transition.
+  pagedViewport: { flex: 1, overflow: "hidden" },
+  catTitle: {
+    color: "#f5d90a",
+    fontSize: 34,
+    lineHeight: 42,
+    fontWeight: "800",
+    marginBottom: 12,
+  },
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 8,
+  },
+  // flexShrink lets a long name ellipsise instead of pushing the price off-row.
+  item: { flexShrink: 1, color: "#fff", fontSize: 26, lineHeight: 32 },
+  price: { flexShrink: 0, color: "#fff", fontSize: 26, lineHeight: 32, fontWeight: "700" },
 
   featColumn: { flex: 1, gap: 16 },
   featCard: { flex: 1, minHeight: 0, borderRadius: 16, overflow: "hidden" },

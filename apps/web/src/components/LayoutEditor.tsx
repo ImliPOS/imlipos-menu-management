@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { UploadCloud, X } from "lucide-react";
 import {
   LAYOUT_TEMPLATES,
+  MENU_METRICS,
+  paginateMenu,
   type Category,
   type Device,
+  type Item,
   type LayoutZone,
+  type MenuPageCategory,
   type ZoneType,
 } from "@imlipos/contracts";
 import { api, uploadMedia } from "@/lib/api";
@@ -36,6 +40,7 @@ export function LayoutEditorPanel({
   onSaved?: () => void;
 }) {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [items, setItems] = useState<Item[]>([]);
   const [templateId, setTemplateId] = useState(device.layout?.template ?? "");
   const [zones, setZones] = useState<LayoutZone[]>(device.layout?.zones ?? []);
   const [selected, setSelected] = useState<string | null>(
@@ -64,9 +69,53 @@ export function LayoutEditorPanel({
     [orientation],
   );
 
+  // The display's logical canvas width in the intended orientation, in *dp*
+  // (the TV lays out fonts/padding in dp = px / pixelRatio). The preview shares
+  // this aspect ratio, so the scale mapping dp → preview px is simply
+  // (measured preview width) / (logical dp width).
+  const pixelRatio = device.resolution?.scale ?? 1;
+  const longSide = device.resolution
+    ? Math.max(device.resolution.width, device.resolution.height)
+    : 1920;
+  const shortSide = device.resolution
+    ? Math.min(device.resolution.width, device.resolution.height)
+    : 1080;
+  const logicalW = (orientation === "portrait" ? shortSide : longSide) / pixelRatio;
+
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [canvasPx, setCanvasPx] = useState(0);
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setCanvasPx(el.clientWidth));
+    ro.observe(el);
+    setCanvasPx(el.clientWidth);
+    return () => ro.disconnect();
+  }, [zones.length, aspect]);
+  const scale = canvasPx > 0 ? canvasPx / logicalW : 0;
+
   useEffect(() => {
     api.listCategories().then(setCategories).catch(console.error);
+    api.listItems().then(setItems).catch(console.error);
   }, []);
+
+  // Available categories / items keyed for the scaled menu preview (matches how
+  // the TV resolves a menu zone: categoryIds order, items by sortOrder).
+  const catById = useMemo(
+    () => new Map(categories.map((c) => [c.id, c])),
+    [categories],
+  );
+  const itemsByCat = useMemo(() => {
+    const m = new Map<string, Item[]>();
+    for (const it of items) {
+      if (!it.isAvailable) continue;
+      const arr = m.get(it.categoryId) ?? [];
+      arr.push(it);
+      m.set(it.categoryId, arr);
+    }
+    for (const arr of m.values()) arr.sort((a, b) => a.sortOrder - b.sortOrder);
+    return m;
+  }, [items]);
 
   function applyTemplate(id: string) {
     const t = LAYOUT_TEMPLATES.find((x) => x.id === id);
@@ -143,6 +192,8 @@ export function LayoutEditorPanel({
 
   return (
     <div className="space-y-4">
+      {/* Slide-in keyframes for the cycling menu preview (left → right). */}
+      <style>{`@keyframes imli-slidein{from{transform:translateX(-100%);opacity:.4}to{transform:translateX(0);opacity:1}}`}</style>
       <div className="space-y-2">
         <Label htmlFor="template">Template</Label>
         <select
@@ -166,6 +217,7 @@ export function LayoutEditorPanel({
           <div>
             <Label>Preview (click a block)</Label>
             <div
+              ref={canvasRef}
               className="relative mt-2 w-full max-w-xl overflow-hidden rounded-lg border border-border bg-background"
               style={{ aspectRatio: String(aspect) }}
             >
@@ -174,9 +226,9 @@ export function LayoutEditorPanel({
                   key={z.id}
                   type="button"
                   onClick={() => setSelected(z.id)}
-                  className={`absolute flex items-center justify-center border text-xs font-medium ${
+                  className={`absolute overflow-hidden border ${
                     ZONE_COLORS[z.type]
-                  } ${selected === z.id ? "ring-2 ring-foreground" : ""}`}
+                  } ${selected === z.id ? "z-10 ring-2 ring-foreground" : ""}`}
                   style={{
                     left: `${z.x}%`,
                     top: `${z.y}%`,
@@ -184,10 +236,29 @@ export function LayoutEditorPanel({
                     height: `${z.h}%`,
                   }}
                 >
-                  {z.type}
+                  {z.type === "menu" && z.categoryIds.length > 0 && scale > 0 ? (
+                    <MenuBlock
+                      zone={z}
+                      scale={scale}
+                      catById={catById}
+                      itemsByCat={itemsByCat}
+                    />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center text-xs font-medium">
+                      {z.type}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
+            {scale > 0 && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Preview scaled to{" "}
+                {orientation === "landscape" ? `${longSide}×${shortSide}` : `${shortSide}×${longSide}`}{" "}
+                · {orientation}. When content doesn’t fit, the block cycles through
+                pages every 5s — just like the display.
+              </p>
+            )}
           </div>
 
           {/* Selected zone content */}
@@ -319,6 +390,144 @@ export function LayoutEditorPanel({
         </Button>
         {saved && <span className="text-sm text-green-400">Saved ✓</span>}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Scaled, faithful preview of a menu block — mirrors the TV's metrics (padding
+ * 32, title 34/42, item rows 26/32) multiplied by `scale`, paginated with the
+ * shared `paginateMenu`. When content doesn't fit, it cycles through pages every
+ * 5s with a left-to-right slide, exactly like the display.
+ */
+function MenuBlock({
+  zone,
+  scale,
+  catById,
+  itemsByCat,
+}: {
+  zone: LayoutZone;
+  scale: number;
+  catById: Map<string, Category>;
+  itemsByCat: Map<string, Item[]>;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [blockPx, setBlockPx] = useState(0);
+  const [page, setPage] = useState(0);
+
+  // Measure the block's pixel height → dp height (÷ scale), minus 32dp padding
+  // each side, is the content area the TV paginates against.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setBlockPx(el.clientHeight));
+    ro.observe(el);
+    setBlockPx(el.clientHeight);
+    return () => ro.disconnect();
+  }, []);
+
+  const { fixed, pages } = useMemo(() => {
+    const simple = zone.categoryIds
+      .map((id) => catById.get(id))
+      .filter((c): c is Category => !!c && c.isAvailable)
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        items: (itemsByCat.get(c.id) ?? []).map((it) => ({
+          id: it.id,
+          name: it.name,
+          price: Number(it.price),
+        })),
+      }))
+      .filter((c) => c.items.length > 0);
+    const innerDp = blockPx > 0 && scale > 0 ? blockPx / scale - 64 : 0;
+    if (innerDp <= 0)
+      return { fixed: simple.map((c) => ({ ...c, continued: false })), pages: [] };
+    return paginateMenu(simple, innerDp, MENU_METRICS);
+  }, [zone.categoryIds, catById, itemsByCat, blockPx, scale]);
+
+  const pageCount = pages.length;
+  const current = pageCount > 0 ? pages[Math.min(page, pageCount - 1)]! : [];
+
+  useEffect(() => {
+    setPage(0);
+  }, [pageCount]);
+  useEffect(() => {
+    if (pageCount <= 1) return;
+    const id = window.setInterval(() => setPage((p) => (p + 1) % pageCount), 5000);
+    return () => window.clearInterval(id);
+  }, [pageCount]);
+
+  return (
+    <div ref={ref} className="absolute inset-0 overflow-hidden bg-[#0a0a0a] text-left">
+      <div className="h-full w-full" style={{ padding: 32 * scale }}>
+        {/* Pinned categories — static, never animated. */}
+        {fixed.map((pc) => (
+          <PreviewCategory key={pc.id} pc={pc} scale={scale} />
+        ))}
+        {/* Overflowing tail — slides a new page in from the left each interval. */}
+        {pageCount > 0 && (
+          <div
+            key={page}
+            style={{ animation: pageCount > 1 ? "imli-slidein 600ms ease-out" : undefined }}
+          >
+            {current.map((pc) => (
+              <PreviewCategory key={`${pc.id}${pc.continued ? "-c" : ""}`} pc={pc} scale={scale} />
+            ))}
+          </div>
+        )}
+      </div>
+      {pageCount > 1 && (
+        <span className="pointer-events-none absolute bottom-1 right-1 rounded bg-sky-600/80 px-1.5 py-0.5 text-[10px] font-medium text-white">
+          ↻ {page + 1}/{pageCount}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function PreviewCategory({ pc, scale }: { pc: MenuPageCategory; scale: number }) {
+  return (
+    <div style={{ marginBottom: 28 * scale }}>
+      <div
+        className="overflow-hidden text-ellipsis whitespace-nowrap"
+        style={{
+          color: "#f5d90a",
+          fontWeight: 800,
+          fontSize: 34 * scale,
+          lineHeight: `${42 * scale}px`,
+          marginBottom: 12 * scale,
+        }}
+      >
+        {pc.name}
+      </div>
+      {pc.items.map((it) => (
+        <div
+          key={it.id}
+          className="flex items-center justify-between"
+          style={{ padding: `${8 * scale}px 0`, gap: 8 * scale }}
+        >
+          {/* Single-line + ellipsis so a long name doesn't wrap — keeping each
+              row at MENU_METRICS.itemH, exactly like the TV. */}
+          <span
+            className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+            style={{ color: "#fff", fontSize: 26 * scale, lineHeight: `${32 * scale}px` }}
+          >
+            {it.name}
+          </span>
+          <span
+            className="shrink-0 whitespace-nowrap"
+            style={{
+              color: "#fff",
+              fontWeight: 700,
+              fontSize: 26 * scale,
+              lineHeight: `${32 * scale}px`,
+            }}
+          >
+            ₹{it.price}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
