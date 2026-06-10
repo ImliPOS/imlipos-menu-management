@@ -1,21 +1,27 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { UploadCloud, X } from "lucide-react";
 import {
   LAYOUT_TEMPLATES,
-  MENU_METRICS,
+  MENU_FONT_LABELS,
+  MENU_FONT_SIZES,
+  menuStyle,
   paginateMenu,
   type Category,
   type Device,
   type Item,
   type LayoutZone,
+  type MenuFontSize,
   type MenuPageCategory,
+  type MenuPageItem,
+  type MenuStyle,
   type ZoneType,
 } from "@imlipos/contracts";
 import { api, uploadMedia } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 
 const field =
   "h-9 w-full max-w-sm rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring";
@@ -43,6 +49,18 @@ export function LayoutEditorPanel({
   const [items, setItems] = useState<Item[]>([]);
   const [templateId, setTemplateId] = useState(device.layout?.template ?? "");
   const [zones, setZones] = useState<LayoutZone[]>(device.layout?.zones ?? []);
+  const [fontSize, setFontSize] = useState<MenuFontSize>(
+    device.layout?.fontSize ?? "medium",
+  );
+  const [sliding, setSliding] = useState(device.layout?.sliding ?? true);
+  // Which menu blocks overflow at the current size — only meaningful with
+  // sliding off, where every item must fit. Keyed by zone id.
+  const [overflowByZone, setOverflowByZone] = useState<Record<string, boolean>>({});
+  const reportOverflow = useCallback((zoneId: string, overflows: boolean) => {
+    setOverflowByZone((prev) =>
+      prev[zoneId] === overflows ? prev : { ...prev, [zoneId]: overflows },
+    );
+  }, []);
   const [selected, setSelected] = useState<string | null>(
     device.layout?.zones?.[0]?.id ?? null,
   );
@@ -124,6 +142,7 @@ export function LayoutEditorPanel({
       id: `z${i}`,
       ...z,
       categoryIds: [],
+      hiddenItemIds: [],
       mediaUrl: null,
     }));
     setTemplateId(id);
@@ -139,7 +158,7 @@ export function LayoutEditorPanel({
 
   // Changing a block's type clears its previous content.
   function changeType(id: string, type: ZoneType) {
-    patchZone(id, { type, categoryIds: [], mediaUrl: null });
+    patchZone(id, { type, categoryIds: [], hiddenItemIds: [], mediaUrl: null });
   }
 
   function toggleCat(zoneId: string, catId: string) {
@@ -147,11 +166,33 @@ export function LayoutEditorPanel({
       prev.map((z) => {
         if (z.id !== zoneId) return z;
         const has = z.categoryIds.includes(catId);
+        if (!has) {
+          return { ...z, categoryIds: [...z.categoryIds, catId] };
+        }
+        // Removing a category: drop it and forget its per-item choices so a
+        // later re-add starts from "show all" again.
+        const catItemIds = new Set((itemsByCat.get(catId) ?? []).map((i) => i.id));
         return {
           ...z,
-          categoryIds: has
-            ? z.categoryIds.filter((c) => c !== catId)
-            : [...z.categoryIds, catId],
+          categoryIds: z.categoryIds.filter((c) => c !== catId),
+          hiddenItemIds: (z.hiddenItemIds ?? []).filter((id) => !catItemIds.has(id)),
+        };
+      }),
+    );
+    setSaved(false);
+  }
+
+  // Toggle a single item's visibility within its block (checked = shown).
+  function toggleItem(zoneId: string, itemId: string) {
+    setZones((prev) =>
+      prev.map((z) => {
+        if (z.id !== zoneId) return z;
+        const hidden = z.hiddenItemIds ?? [];
+        return {
+          ...z,
+          hiddenItemIds: hidden.includes(itemId)
+            ? hidden.filter((id) => id !== itemId)
+            : [...hidden, itemId],
         };
       }),
     );
@@ -167,7 +208,12 @@ export function LayoutEditorPanel({
     setBusy(true);
     setSaved(false);
     try {
-      await api.updateDeviceLayout(device.id, { template: templateId, zones });
+      await api.updateDeviceLayout(device.id, {
+        template: templateId,
+        zones,
+        fontSize,
+        sliding,
+      });
       setSaved(true);
       onSaved?.();
     } finally {
@@ -176,6 +222,14 @@ export function LayoutEditorPanel({
   }
 
   const sel = zones.find((z) => z.id === selected) ?? null;
+
+  // With sliding off, a layout can only be saved when every menu block's items
+  // fit statically. A block reports overflow via reportOverflow.
+  const blocksDontFit =
+    !sliding &&
+    zones.some(
+      (z) => z.type === "menu" && z.categoryIds.length > 0 && overflowByZone[z.id],
+    );
 
   // A category may only live in one menu/featured block. Collect the ones
   // already claimed by *other* blocks so we can disable them here.
@@ -211,6 +265,56 @@ export function LayoutEditorPanel({
         </select>
       </div>
 
+      {zones.some((z) => z.type === "menu") && (
+        <div className="space-y-2">
+          <Label>Menu font size</Label>
+          <div className="flex flex-wrap gap-2">
+            {MENU_FONT_SIZES.map((size) => (
+              <button
+                key={size}
+                type="button"
+                onClick={() => {
+                  setFontSize(size);
+                  setSaved(false);
+                }}
+                className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
+                  fontSize === size
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-input bg-background hover:bg-secondary/60"
+                }`}
+              >
+                {MENU_FONT_LABELS[size]}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Applies to every menu block on this display. Larger sizes fit fewer
+            items per page, so they cycle more.
+          </p>
+        </div>
+      )}
+
+      {zones.some((z) => z.type === "menu") && (
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-3">
+            <Label htmlFor="sliding">Sliding menu</Label>
+            <Switch
+              id="sliding"
+              checked={sliding}
+              onCheckedChange={(v) => {
+                setSliding(v);
+                setSaved(false);
+              }}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {sliding
+              ? "On — overflowing blocks cycle their items in a sliding transition."
+              : "Off — every item must fit on screen. Blocks that overflow are marked “Does not fit” and the layout can’t be saved."}
+          </p>
+        </div>
+      )}
+
       {zones.length > 0 && (
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Preview */}
@@ -240,8 +344,11 @@ export function LayoutEditorPanel({
                     <MenuBlock
                       zone={z}
                       scale={scale}
+                      fontSize={fontSize}
+                      sliding={sliding}
                       catById={catById}
                       itemsByCat={itemsByCat}
+                      onOverflow={reportOverflow}
                     />
                   ) : (
                     <span className="flex h-full w-full items-center justify-center text-xs font-medium">
@@ -255,8 +362,16 @@ export function LayoutEditorPanel({
               <p className="mt-2 text-xs text-muted-foreground">
                 Preview scaled to{" "}
                 {orientation === "landscape" ? `${longSide}×${shortSide}` : `${shortSide}×${longSide}`}{" "}
-                · {orientation}. When content doesn’t fit, the block cycles through
-                pages every 5s — just like the display.
+                · {orientation}.{" "}
+                {sliding
+                  ? "When content doesn’t fit, the block cycles through pages every 5s — just like the display."
+                  : "Sliding is off, so every item must fit on screen."}
+              </p>
+            )}
+            {blocksDontFit && (
+              <p className="mt-1 text-sm font-medium text-red-400">
+                Does not fit — turn on Sliding menu, pick a smaller font, or move
+                some categories to another block before saving.
               </p>
             )}
           </div>
@@ -294,6 +409,7 @@ export function LayoutEditorPanel({
                       const takenBy = usedElsewhere.get(c.id);
                       const disabled =
                         !!takenBy && !sel.categoryIds.includes(c.id);
+                      const enabled = sel.categoryIds.includes(c.id);
                       return (
                         <li key={c.id}>
                           <label
@@ -306,7 +422,7 @@ export function LayoutEditorPanel({
                             <input
                               type="checkbox"
                               disabled={disabled}
-                              checked={sel.categoryIds.includes(c.id)}
+                              checked={enabled}
                               onChange={() => toggleCat(sel.id, c.id)}
                             />
                             {c.name}
@@ -316,6 +432,14 @@ export function LayoutEditorPanel({
                               </span>
                             )}
                           </label>
+                          {/* Once a category is on, pick which of its items show. */}
+                          {sel.type === "menu" && enabled && (
+                            <CategoryItemPicker
+                              items={itemsByCat.get(c.id) ?? []}
+                              hiddenIds={new Set(sel.hiddenItemIds ?? [])}
+                              onToggle={(itemId) => toggleItem(sel.id, itemId)}
+                            />
+                          )}
                         </li>
                       );
                     })}
@@ -385,9 +509,14 @@ export function LayoutEditorPanel({
       )}
 
       <div className="flex items-center gap-3">
-        <Button onClick={save} disabled={busy || zones.length === 0}>
+        <Button onClick={save} disabled={busy || zones.length === 0 || blocksDontFit}>
           {busy ? "Saving…" : "Save layout"}
         </Button>
+        {blocksDontFit && (
+          <span className="text-sm text-red-400">
+            Can’t save — a menu block doesn’t fit.
+          </span>
+        )}
         {saved && <span className="text-sm text-green-400">Saved ✓</span>}
       </div>
     </div>
@@ -395,25 +524,78 @@ export function LayoutEditorPanel({
 }
 
 /**
- * Scaled, faithful preview of a menu block — mirrors the TV's metrics (padding
- * 32, title 34/42, item rows 26/32) multiplied by `scale`, paginated with the
+ * Collapsible list of a category's items with checkboxes — checked items show in
+ * the block, unchecked ones are hidden (stored as the zone's hiddenItemIds).
+ */
+function CategoryItemPicker({
+  items,
+  hiddenIds,
+  onToggle,
+}: {
+  items: Item[];
+  hiddenIds: Set<string>;
+  onToggle: (itemId: string) => void;
+}) {
+  const shown = items.reduce((n, it) => n + (hiddenIds.has(it.id) ? 0 : 1), 0);
+  return (
+    <details className="ml-6 mt-1">
+      <summary className="cursor-pointer select-none text-xs text-muted-foreground">
+        Items — {shown}/{items.length} shown
+      </summary>
+      {items.length === 0 ? (
+        <p className="mt-1 text-xs text-muted-foreground">
+          No items in this category.
+        </p>
+      ) : (
+        <ul className="mt-1 space-y-1">
+          {items.map((it) => (
+            <li key={it.id}>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={!hiddenIds.has(it.id)}
+                  onChange={() => onToggle(it.id)}
+                />
+                <span className="min-w-0 flex-1 truncate">{it.name}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  ₹{Number(it.price)}
+                </span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
+    </details>
+  );
+}
+
+/**
+ * Scaled, faithful preview of a menu block — mirrors the TV's typography for the
+ * chosen font preset (via menuStyle) multiplied by `scale`, paginated with the
  * shared `paginateMenu`. When content doesn't fit, it cycles through pages every
  * 5s with a left-to-right slide, exactly like the display.
  */
 function MenuBlock({
   zone,
   scale,
+  fontSize,
+  sliding,
   catById,
   itemsByCat,
+  onOverflow,
 }: {
   zone: LayoutZone;
   scale: number;
+  fontSize: MenuFontSize;
+  sliding: boolean;
   catById: Map<string, Category>;
   itemsByCat: Map<string, Item[]>;
+  onOverflow: (zoneId: string, overflows: boolean) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [blockPx, setBlockPx] = useState(0);
-  const [page, setPage] = useState(0);
+  const [frame, setFrame] = useState(0);
+  const ms = useMemo(() => menuStyle(fontSize), [fontSize]);
 
   // Measure the block's pixel height → dp height (÷ scale), minus 32dp padding
   // each side, is the content area the TV paginates against.
@@ -426,107 +608,180 @@ function MenuBlock({
     return () => ro.disconnect();
   }, []);
 
-  const { fixed, pages } = useMemo(() => {
-    const simple = zone.categoryIds
+  const simple = useMemo(() => {
+    const hidden = new Set(zone.hiddenItemIds ?? []);
+    return zone.categoryIds
       .map((id) => catById.get(id))
       .filter((c): c is Category => !!c && c.isAvailable)
       .map((c) => ({
         id: c.id,
         name: c.name,
-        items: (itemsByCat.get(c.id) ?? []).map((it) => ({
-          id: it.id,
-          name: it.name,
-          price: Number(it.price),
-        })),
+        items: (itemsByCat.get(c.id) ?? [])
+          .filter((it) => !hidden.has(it.id))
+          .map((it) => ({ id: it.id, name: it.name, price: Number(it.price) })),
       }))
       .filter((c) => c.items.length > 0);
-    const innerDp = blockPx > 0 && scale > 0 ? blockPx / scale - 64 : 0;
-    if (innerDp <= 0)
-      return { fixed: simple.map((c) => ({ ...c, continued: false })), pages: [] };
-    return paginateMenu(simple, innerDp, MENU_METRICS);
-  }, [zone.categoryIds, catById, itemsByCat, blockPx, scale]);
+  }, [zone.categoryIds, zone.hiddenItemIds, catById, itemsByCat]);
 
-  const pageCount = pages.length;
-  const current = pageCount > 0 ? pages[Math.min(page, pageCount - 1)]! : [];
+  const innerDp = blockPx > 0 && scale > 0 ? blockPx / scale - 64 : 0;
+  const { fixed, cycle } = useMemo(() => {
+    if (innerDp <= 0) return { fixed: simple, cycle: [] };
+    return paginateMenu(simple, innerDp, ms);
+  }, [simple, innerDp, ms]);
+
+  // The block overflows when, after pinning everything that fits, something is
+  // left to cycle. Only blocks the metrics have actually measured (innerDp > 0)
+  // are reported, so we never flag "doesn't fit" before the preview is sized.
+  const overflows = innerDp > 0 && cycle.length > 0;
+  useEffect(() => {
+    if (innerDp > 0) onOverflow(zone.id, overflows);
+  }, [zone.id, overflows, innerDp, onOverflow]);
+
+  // Flatten cycling categories into item-page frames, each shown under its
+  // category's static heading (mirrors the TV exactly). Empty with sliding off.
+  const frames = useMemo(
+    () =>
+      sliding
+        ? cycle.flatMap((c) =>
+            c.itemPages.map((items) => ({ catId: c.id, name: c.name, items })),
+          )
+        : [],
+    [cycle, sliding],
+  );
+  const frameCount = frames.length;
+  const current = frameCount > 0 ? frames[Math.min(frame, frameCount - 1)]! : null;
 
   useEffect(() => {
-    setPage(0);
-  }, [pageCount]);
+    setFrame(0);
+  }, [frameCount]);
   useEffect(() => {
-    if (pageCount <= 1) return;
-    const id = window.setInterval(() => setPage((p) => (p + 1) % pageCount), 5000);
+    if (frameCount <= 1) return;
+    const id = window.setInterval(() => setFrame((f) => (f + 1) % frameCount), 5000);
     return () => window.clearInterval(id);
-  }, [pageCount]);
+  }, [frameCount]);
 
   return (
     <div ref={ref} className="absolute inset-0 overflow-hidden bg-[#0a0a0a] text-left">
-      <div className="h-full w-full" style={{ padding: 32 * scale }}>
-        {/* Pinned categories — static, never animated. */}
-        {fixed.map((pc) => (
-          <PreviewCategory key={pc.id} pc={pc} scale={scale} />
+      <div className="flex h-full w-full flex-col" style={{ padding: 32 * scale }}>
+        {/* Sliding off: render every category statically (overflow is clipped and
+            flagged below). Sliding on: pinned categories + the cycling tail. */}
+        {(sliding ? fixed : simple).map((pc) => (
+          <PreviewCategory key={pc.id} pc={pc} scale={scale} ms={ms} />
         ))}
-        {/* Overflowing tail — slides a new page in from the left each interval. */}
-        {pageCount > 0 && (
-          <div
-            key={page}
-            style={{ animation: pageCount > 1 ? "imli-slidein 600ms ease-out" : undefined }}
-          >
-            {current.map((pc) => (
-              <PreviewCategory key={`${pc.id}${pc.continued ? "-c" : ""}`} pc={pc} scale={scale} />
-            ))}
+        {/* Overflowing category — heading static; only the item rows cycle. */}
+        {current && (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <PreviewCategoryTitle name={current.name} scale={scale} ms={ms} />
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <div
+                key={frame}
+                style={{
+                  animation:
+                    frameCount > 1 ? "imli-slidein 600ms ease-out" : undefined,
+                }}
+              >
+                {current.items.map((it) => (
+                  <PreviewItemRow key={it.id} it={it} scale={scale} ms={ms} />
+                ))}
+              </div>
+            </div>
           </div>
         )}
       </div>
-      {pageCount > 1 && (
+      {sliding && frameCount > 1 && (
         <span className="pointer-events-none absolute bottom-1 right-1 rounded bg-sky-600/80 px-1.5 py-0.5 text-[10px] font-medium text-white">
-          ↻ {page + 1}/{pageCount}
+          ↻ {frame + 1}/{frameCount}
+        </span>
+      )}
+      {!sliding && overflows && (
+        <span className="pointer-events-none absolute bottom-1 right-1 rounded bg-red-600/90 px-1.5 py-0.5 text-[10px] font-medium text-white">
+          Does not fit
         </span>
       )}
     </div>
   );
 }
 
-function PreviewCategory({ pc, scale }: { pc: MenuPageCategory; scale: number }) {
+function PreviewCategoryTitle({
+  name,
+  scale,
+  ms,
+}: {
+  name: string;
+  scale: number;
+  ms: MenuStyle;
+}) {
   return (
-    <div style={{ marginBottom: 28 * scale }}>
-      <div
-        className="overflow-hidden text-ellipsis whitespace-nowrap"
+    <div
+      className="overflow-hidden text-ellipsis whitespace-nowrap"
+      style={{
+        color: "#f5d90a",
+        fontWeight: 800,
+        fontSize: ms.titleFont * scale,
+        lineHeight: `${ms.titleLine * scale}px`,
+        marginBottom: ms.titleGap * scale,
+      }}
+    >
+      {name}
+    </div>
+  );
+}
+
+function PreviewItemRow({
+  it,
+  scale,
+  ms,
+}: {
+  it: MenuPageItem;
+  scale: number;
+  ms: MenuStyle;
+}) {
+  return (
+    <div
+      className="flex items-center justify-between"
+      style={{ padding: `${ms.itemPadV * scale}px 0`, gap: 8 * scale }}
+    >
+      {/* Single-line + ellipsis so a long name doesn't wrap — keeping each
+          row at the font preset's itemH, exactly like the TV. */}
+      <span
+        className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
         style={{
-          color: "#f5d90a",
-          fontWeight: 800,
-          fontSize: 34 * scale,
-          lineHeight: `${42 * scale}px`,
-          marginBottom: 12 * scale,
+          color: "#fff",
+          fontSize: ms.itemFont * scale,
+          lineHeight: `${ms.itemLine * scale}px`,
         }}
       >
-        {pc.name}
-      </div>
+        {it.name}
+      </span>
+      <span
+        className="shrink-0 whitespace-nowrap"
+        style={{
+          color: "#fff",
+          fontWeight: 700,
+          fontSize: ms.itemFont * scale,
+          lineHeight: `${ms.itemLine * scale}px`,
+        }}
+      >
+        ₹{it.price}
+      </span>
+    </div>
+  );
+}
+
+function PreviewCategory({
+  pc,
+  scale,
+  ms,
+}: {
+  pc: MenuPageCategory;
+  scale: number;
+  ms: MenuStyle;
+}) {
+  return (
+    <div style={{ marginBottom: ms.catGap * scale }}>
+      <PreviewCategoryTitle name={pc.name} scale={scale} ms={ms} />
       {pc.items.map((it) => (
-        <div
-          key={it.id}
-          className="flex items-center justify-between"
-          style={{ padding: `${8 * scale}px 0`, gap: 8 * scale }}
-        >
-          {/* Single-line + ellipsis so a long name doesn't wrap — keeping each
-              row at MENU_METRICS.itemH, exactly like the TV. */}
-          <span
-            className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
-            style={{ color: "#fff", fontSize: 26 * scale, lineHeight: `${32 * scale}px` }}
-          >
-            {it.name}
-          </span>
-          <span
-            className="shrink-0 whitespace-nowrap"
-            style={{
-              color: "#fff",
-              fontWeight: 700,
-              fontSize: 26 * scale,
-              lineHeight: `${32 * scale}px`,
-            }}
-          >
-            ₹{it.price}
-          </span>
-        </div>
+        <PreviewItemRow key={it.id} it={it} scale={scale} ms={ms} />
       ))}
     </div>
   );

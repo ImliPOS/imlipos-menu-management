@@ -15,11 +15,14 @@ import {
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import * as ScreenOrientation from "expo-screen-orientation";
-import { MENU_METRICS, paginateMenu } from "@imlipos/contracts";
+import { menuStyle, paginateMenu } from "@imlipos/contracts";
 import type {
   DeviceContent,
   MenuCategoryView,
+  MenuFontSize,
   MenuPageCategory,
+  MenuPageItem,
+  MenuStyle,
   ResolvedZone,
 } from "@imlipos/contracts";
 import {
@@ -213,7 +216,11 @@ export function MenuScreen({
               menuDivider(z, content.zones),
             ]}
           >
-            <Zone zone={z} />
+            <Zone
+              zone={z}
+              fontSize={content.fontSize ?? "medium"}
+              sliding={content.sliding ?? true}
+            />
           </View>
         ))}
       </View>
@@ -221,7 +228,15 @@ export function MenuScreen({
   );
 }
 
-function Zone({ zone }: { zone: ResolvedZone }) {
+function Zone({
+  zone,
+  fontSize,
+  sliding,
+}: {
+  zone: ResolvedZone;
+  fontSize: MenuFontSize;
+  sliding: boolean;
+}) {
   if (zone.type === "image") {
     return zone.mediaUrl ? (
       <Image
@@ -271,7 +286,7 @@ function Zone({ zone }: { zone: ResolvedZone }) {
   const cats = (zone.categories ?? []).filter(
     (c) => c.isAvailable && c.items.some((i) => i.isAvailable),
   );
-  return <PagedMenu cats={cats} />;
+  return <PagedMenu cats={cats} fontSize={fontSize} sliding={sliding} />;
 }
 
 // Two menu blocks sitting edge-to-edge read as one continuous menu. Draw a
@@ -318,52 +333,78 @@ function VideoZone({ uri }: { uri: string }) {
 }
 
 // Renders a menu block. Categories that fully fit are pinned statically at the
-// top; the first one that overflows (and anything after it) auto-pages through
-// the leftover space, sliding the next page in from the left every 5s, so every
-// item is shown over time while the pinned categories stay put. Layout comes
-// from the shared paginateMenu so the editor preview matches exactly.
+// top; the first one that overflows (and anything after it) cycles its items —
+// the category heading stays put while only the item rows slide in from the left
+// every 5s, so every item is shown over time without the headings moving. Layout
+// comes from the shared paginateMenu so the editor preview matches exactly.
 const PAGE_INTERVAL_MS = 5000;
-function PagedMenu({ cats }: { cats: MenuCategoryView[] }) {
+function PagedMenu({
+  cats,
+  fontSize,
+  sliding,
+}: {
+  cats: MenuCategoryView[];
+  fontSize: MenuFontSize;
+  sliding: boolean;
+}) {
   const [size, setSize] = useState({ w: 0, h: 0 });
-  const [page, setPage] = useState(0);
+  const [frame, setFrame] = useState(0);
   const x = useRef(new Animated.Value(0)).current;
+  const ms = useMemo(() => menuStyle(fontSize), [fontSize]);
 
-  const { fixed, pages } = useMemo(() => {
-    const simple = cats.map((c) => ({
-      id: c.id,
-      name: c.name,
-      items: c.items
-        .filter((i) => i.isAvailable)
-        .map((i) => ({ id: i.id, name: i.name, price: i.price })),
-    }));
-    if (size.h <= 0)
-      return { fixed: simple.map((c) => ({ ...c, continued: false })), pages: [] };
-    return paginateMenu(simple, size.h, MENU_METRICS);
-  }, [cats, size.h]);
+  const simple = useMemo(
+    () =>
+      cats.map((c) => ({
+        id: c.id,
+        name: c.name,
+        items: c.items
+          .filter((i) => i.isAvailable)
+          .map((i) => ({ id: i.id, name: i.name, price: i.price })),
+      })),
+    [cats],
+  );
 
-  const pageCount = pages.length;
-  const current = pageCount > 0 ? pages[Math.min(page, pageCount - 1)]! : [];
+  const { fixed, cycle } = useMemo(() => {
+    if (size.h <= 0) return { fixed: simple, cycle: [] };
+    return paginateMenu(simple, size.h, ms);
+  }, [simple, size.h, ms]);
+
+  // Flatten the cycling categories into one stream of frames; each frame is a
+  // single item-page shown under its category's (static) heading. With sliding
+  // off, nothing cycles — every category is rendered statically below.
+  const frames = useMemo(
+    () =>
+      sliding
+        ? cycle.flatMap((c) =>
+            c.itemPages.map((items) => ({ catId: c.id, name: c.name, items })),
+          )
+        : [],
+    [cycle, sliding],
+  );
+  const frameCount = frames.length;
+  const current = frameCount > 0 ? frames[Math.min(frame, frameCount - 1)]! : null;
 
   useEffect(() => {
-    setPage(0);
-  }, [pageCount]);
+    setFrame(0);
+  }, [frameCount]);
 
-  // Advance every interval — only when there's more than one page.
+  // Advance every interval — only when there's more than one item-page to show.
   useEffect(() => {
-    if (pageCount <= 1) return;
-    const id = setInterval(() => setPage((p) => (p + 1) % pageCount), PAGE_INTERVAL_MS);
+    if (frameCount <= 1) return;
+    const id = setInterval(() => setFrame((f) => (f + 1) % frameCount), PAGE_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [pageCount]);
+  }, [frameCount]);
 
-  // Slide the new page in from the left edge → content flows left-to-right.
+  // Slide the new item-page in from the left edge → items flow left-to-right.
+  // The heading is outside this animation, so it never moves.
   useEffect(() => {
-    if (pageCount <= 1) {
+    if (frameCount <= 1) {
       x.setValue(0);
       return;
     }
     x.setValue(-(size.w || 300));
     Animated.timing(x, { toValue: 0, duration: 600, useNativeDriver: true }).start();
-  }, [page, size.w, pageCount, x]);
+  }, [frame, size.w, frameCount, x]);
 
   return (
     <View
@@ -375,46 +416,73 @@ function PagedMenu({ cats }: { cats: MenuCategoryView[] }) {
         setSize((s) => (s.w === w && s.h === h ? s : { w, h }));
       }}
     >
-      {/* Pinned categories — static, never animated. */}
-      {fixed.map((pc) => (
-        <MenuCategoryRows key={pc.id} pc={pc} />
+      {/* Sliding off: render every category statically (the editor guarantees
+          they fit before saving). Sliding on: pinned categories + cycling tail. */}
+      {(sliding ? fixed : simple).map((pc) => (
+        <MenuCategoryRows key={pc.id} pc={pc} ms={ms} />
       ))}
-      {/* Overflowing tail — slides a new page in from the left each interval. */}
-      {pageCount > 0 && (
-        <View style={styles.pagedViewport}>
-          <Animated.View style={{ transform: [{ translateX: x }] }}>
-            {current.map((pc) => (
-              <MenuCategoryRows key={`${pc.id}${pc.continued ? "-c" : ""}`} pc={pc} />
-            ))}
-          </Animated.View>
+      {/* Overflowing category — heading static; only the item rows cycle. */}
+      {current && (
+        <View style={styles.cyclingCategory}>
+          <Text
+            style={[styles.catTitle, catTitleSize(ms)]}
+            numberOfLines={1}
+          >
+            {current.name}
+          </Text>
+          <View style={styles.pagedViewport}>
+            <Animated.View style={{ transform: [{ translateX: x }] }}>
+              <MenuItemRows items={current.items} ms={ms} />
+            </Animated.View>
+          </View>
         </View>
       )}
     </View>
   );
 }
 
-function MenuCategoryRows({ pc }: { pc: MenuPageCategory }) {
+function MenuCategoryRows({ pc, ms }: { pc: MenuPageCategory; ms: MenuStyle }) {
   return (
-    <View style={styles.category}>
-      <Text style={styles.catTitle} numberOfLines={1}>
+    <View style={{ marginBottom: ms.catGap }}>
+      <Text style={[styles.catTitle, catTitleSize(ms)]} numberOfLines={1}>
         {pc.name}
       </Text>
-      {pc.items.map((it) => (
-        <View key={it.id} style={styles.row}>
+      <MenuItemRows items={pc.items} ms={ms} />
+    </View>
+  );
+}
+
+function MenuItemRows({ items, ms }: { items: MenuPageItem[]; ms: MenuStyle }) {
+  return (
+    <>
+      {items.map((it) => (
+        <View key={it.id} style={[styles.row, { paddingVertical: ms.itemPadV }]}>
           {/* Single-line, ellipsised — a wrapped name would make the row taller
-              than MENU_METRICS.itemH and the metric-based pagination would then
-              overflow the zone, clipping the bottom rows on the real display. */}
-          <Text style={styles.item} numberOfLines={1}>
+              than the font preset's itemH and the metric-based pagination would
+              then overflow the zone, clipping the bottom rows on the real panel. */}
+          <Text style={[styles.item, itemSize(ms)]} numberOfLines={1}>
             {it.name}
           </Text>
-          <Text style={styles.price} numberOfLines={1}>
+          <Text style={[styles.price, itemSize(ms)]} numberOfLines={1}>
             ₹{it.price}
           </Text>
         </View>
       ))}
-    </View>
+    </>
   );
 }
+
+// Font-preset-driven sizes layered over the static colour/weight styles, so the
+// chosen menu font size scales the text exactly as the pagination metrics expect.
+const catTitleSize = (ms: MenuStyle) => ({
+  fontSize: ms.titleFont,
+  lineHeight: ms.titleLine,
+  marginBottom: ms.titleGap,
+});
+const itemSize = (ms: MenuStyle) => ({
+  fontSize: ms.itemFont,
+  lineHeight: ms.itemLine,
+});
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#0a0a0a" },
@@ -429,26 +497,23 @@ const styles = StyleSheet.create({
   activeSubtitle: { color: "#9ca3af", fontSize: 24, textAlign: "center" },
 
   zonePad: { flex: 1, padding: 32 },
-  category: { marginBottom: 28 },
-  // Clips the sliding page during the paged-menu transition.
+  // The overflowing category fills the leftover height so its item viewport
+  // (below the static heading) gets all the remaining space to cycle within.
+  cyclingCategory: { flex: 1 },
+  // Clips the sliding item-page during the cycle transition.
   pagedViewport: { flex: 1, overflow: "hidden" },
-  catTitle: {
-    color: "#f5d90a",
-    fontSize: 34,
-    lineHeight: 42,
-    fontWeight: "800",
-    marginBottom: 12,
-  },
+  // Colour/weight only — the font size, line height and gaps come from the
+  // active font preset (see catTitleSize / itemSize / the inline catGap).
+  catTitle: { color: "#f5d90a", fontWeight: "800" },
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     gap: 8,
-    paddingVertical: 8,
   },
   // flexShrink lets a long name ellipsise instead of pushing the price off-row.
-  item: { flexShrink: 1, color: "#fff", fontSize: 26, lineHeight: 32 },
-  price: { flexShrink: 0, color: "#fff", fontSize: 26, lineHeight: 32, fontWeight: "700" },
+  item: { flexShrink: 1, color: "#fff" },
+  price: { flexShrink: 0, color: "#fff", fontWeight: "700" },
 
   featColumn: { flex: 1, gap: 16 },
   featCard: { flex: 1, minHeight: 0, borderRadius: 16, overflow: "hidden" },

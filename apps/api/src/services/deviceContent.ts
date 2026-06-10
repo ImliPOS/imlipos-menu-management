@@ -78,6 +78,8 @@ export async function buildDeviceContent(
         { id: "default", x: 0, y: 0, w: 100, h: 100, type: "menu", categories: cats },
       ],
       orientation,
+      fontSize: "medium",
+      sliding: true,
       version,
     };
   }
@@ -95,13 +97,26 @@ export async function buildDeviceContent(
   const zones: ResolvedZone[] = layout.zones.map((z) => {
     const base = { id: z.id, x: z.x, y: z.y, w: z.w, h: z.h, type: z.type };
     if (z.type === "menu" || z.type === "featured") {
+      // Drop any items the block hides within its categories (empty = show all).
+      const hidden = new Set(z.hiddenItemIds ?? []);
       const cats = z.categoryIds
         .map((id) => catMap.get(id))
-        .filter((c): c is MenuCategoryView => !!c);
+        .filter((c): c is MenuCategoryView => !!c)
+        .map((c) =>
+          hidden.size
+            ? { ...c, items: c.items.filter((it) => !hidden.has(it.id)) }
+            : c,
+        );
       return { ...base, categories: cats };
     }
     return { ...base, mediaUrl: z.mediaUrl ?? null };
   });
 
-  return { zones, orientation, version };
+  return {
+    zones,
+    orientation,
+    fontSize: layout.fontSize ?? "medium",
+    sliding: layout.sliding ?? true,
+    version,
+  };
 }
