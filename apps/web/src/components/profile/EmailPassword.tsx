@@ -4,33 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { MailIcon, EyeIcon, EyeOffIcon, CheckIcon, XIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
+import {
+  passwordRequirements as requirements,
+  strengthColor as color,
+  strengthText as text,
+} from "@/lib/password";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
-const requirements = [
-  { regex: /.{8,}/, text: "At least 8 characters" },
-  { regex: /[a-z]/, text: "At least 1 lowercase letter" },
-  { regex: /[A-Z]/, text: "At least 1 uppercase letter" },
-  { regex: /[0-9]/, text: "At least 1 number" },
-  { regex: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?]/, text: "At least 1 special character" },
-];
-
-function color(score: number) {
-  if (score === 0) return "bg-border";
-  if (score <= 1) return "bg-red-500";
-  if (score <= 2) return "bg-orange-500";
-  if (score <= 3) return "bg-amber-500";
-  if (score === 4) return "bg-yellow-400";
-  return "bg-green-500";
-}
-function text(score: number) {
-  if (score === 0) return "Enter a password";
-  if (score <= 2) return "Weak password";
-  if (score <= 3) return "Medium password";
-  if (score === 4) return "Strong password";
-  return "Very strong password";
-}
 
 /** Show email (read-only) and change password (Supabase). */
 export function EmailPassword() {
