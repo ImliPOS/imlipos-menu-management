@@ -639,13 +639,31 @@ function MenuBlock({
     return paginateMenu(simple, innerDp, ms);
   }, [simple, innerDp, ms]);
 
-  // The block overflows when, after pinning everything that fits, something is
-  // left to cycle. Only blocks the metrics have actually measured (innerDp > 0)
-  // are reported, so we never flag "doesn't fit" before the preview is sized.
-  const overflows = innerDp > 0 && cycle.length > 0;
+  // With sliding OFF, decide "fits" by *measuring* the actually-rendered content
+  // against the block's padded content area — not by estimating from metrics.
+  // This makes the warning match exactly what's drawn (real font glyphs, line
+  // heights, and no phantom trailing-category gap). Sliding ON still uses the
+  // metric pagination, which drives the pin/cycle split.
+  const staticRef = useRef<HTMLDivElement>(null);
+  const [staticOverflow, setStaticOverflow] = useState(false);
   useEffect(() => {
-    if (innerDp > 0) onOverflow(zone.id, overflows);
-  }, [zone.id, overflows, innerDp, onOverflow]);
+    if (sliding) {
+      setStaticOverflow(false);
+      return;
+    }
+    const el = staticRef.current;
+    if (!el || blockPx <= 0 || scale <= 0) return;
+    const available = blockPx - 64 * scale; // block minus 32dp padding each side
+    setStaticOverflow(el.scrollHeight > available + 1); // +1px sub-pixel slack
+  }, [simple, fontSize, scale, blockPx, sliding]);
+
+  // Sliding on → metric pagination leaves a cycling tail; off → measured fit.
+  const overflows = sliding
+    ? innerDp > 0 && cycle.length > 0
+    : blockPx > 0 && staticOverflow;
+  useEffect(() => {
+    if (blockPx > 0) onOverflow(zone.id, overflows);
+  }, [zone.id, overflows, blockPx, onOverflow]);
 
   // Flatten cycling categories into item-page frames, each shown under its
   // category's static heading (mirrors the TV exactly). Empty with sliding off.
@@ -673,29 +691,40 @@ function MenuBlock({
   return (
     <div ref={ref} className="absolute inset-0 overflow-hidden bg-[#0a0a0a] text-left">
       <div className="flex h-full w-full flex-col" style={{ padding: 32 * scale }}>
-        {/* Sliding off: render every category statically (overflow is clipped and
-            flagged below). Sliding on: pinned categories + the cycling tail. */}
-        {(sliding ? fixed : simple).map((pc) => (
-          <PreviewCategory key={pc.id} pc={pc} scale={scale} ms={ms} />
-        ))}
-        {/* Overflowing category — heading static; only the item rows cycle. */}
-        {current && (
-          <div className="flex min-h-0 flex-1 flex-col">
-            <PreviewCategoryTitle name={current.name} scale={scale} ms={ms} />
-            <div className="min-h-0 flex-1 overflow-hidden">
-              <div
-                key={frame}
-                style={{
-                  animation:
-                    frameCount > 1 ? "imli-slidein 600ms ease-out" : undefined,
-                }}
-              >
-                {current.items.map((it) => (
-                  <PreviewItemRow key={it.id} it={it} scale={scale} ms={ms} />
-                ))}
-              </div>
-            </div>
+        {!sliding ? (
+          /* Sliding off: render every category statically in a wrapper we
+             measure for real overflow (clipped by the block's overflow-hidden). */
+          <div ref={staticRef}>
+            {simple.map((pc) => (
+              <PreviewCategory key={pc.id} pc={pc} scale={scale} ms={ms} />
+            ))}
           </div>
+        ) : (
+          /* Sliding on: pinned categories + the cycling tail. */
+          <>
+            {fixed.map((pc) => (
+              <PreviewCategory key={pc.id} pc={pc} scale={scale} ms={ms} />
+            ))}
+            {/* Overflowing category — heading static; only the item rows cycle. */}
+            {current && (
+              <div className="flex min-h-0 flex-1 flex-col">
+                <PreviewCategoryTitle name={current.name} scale={scale} ms={ms} />
+                <div className="min-h-0 flex-1 overflow-hidden">
+                  <div
+                    key={frame}
+                    style={{
+                      animation:
+                        frameCount > 1 ? "imli-slidein 600ms ease-out" : undefined,
+                    }}
+                  >
+                    {current.items.map((it) => (
+                      <PreviewItemRow key={it.id} it={it} scale={scale} ms={ms} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
       {sliding && frameCount > 1 && (
