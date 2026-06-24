@@ -29,12 +29,13 @@ export type LayoutZone = z.infer<typeof layoutZone>;
 
 /** Menu typography preset, chosen per display. "medium" is the original size;
  *  the others scale every menu font/row up or down (see MENU_FONT_SCALE). */
-export const MENU_FONT_SIZES = ["small", "medium", "large", "xlarge"] as const;
+export const MENU_FONT_SIZES = ["xsmall", "small", "medium", "large", "xlarge"] as const;
 export const menuFontSize = z.enum(MENU_FONT_SIZES);
 export type MenuFontSize = (typeof MENU_FONT_SIZES)[number];
 
 /** Human labels for the presets (shared by the editor UI). */
 export const MENU_FONT_LABELS: Record<MenuFontSize, string> = {
+  xsmall: "Very small",
   small: "Small",
   medium: "Medium",
   large: "Large",
@@ -321,6 +322,7 @@ export interface PaginateCategory {
 
 /** Multiplier applied to the base (medium) menu typography per preset. */
 export const MENU_FONT_SCALE: Record<MenuFontSize, number> = {
+  xsmall: 0.65,
   small: 0.8,
   medium: 1,
   large: 1.25,
