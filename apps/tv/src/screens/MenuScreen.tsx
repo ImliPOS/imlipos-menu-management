@@ -15,7 +15,7 @@ import {
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import * as ScreenOrientation from "expo-screen-orientation";
-import { menuStyle, paginateMenu } from "@imlipos/contracts";
+import { MENU_BLOCK_PAD, menuStyle, paginateMenu } from "@imlipos/contracts";
 import type {
   DeviceContent,
   MenuCategoryView,
@@ -410,9 +410,9 @@ function PagedMenu({
     <View
       style={styles.zonePad}
       onLayout={(e) => {
-        // Content area = the zone minus its 32dp padding on each side.
-        const w = e.nativeEvent.layout.width - 64;
-        const h = e.nativeEvent.layout.height - 64;
+        // Content area = the zone minus its padding on each side.
+        const w = e.nativeEvent.layout.width - MENU_BLOCK_PAD * 2;
+        const h = e.nativeEvent.layout.height - MENU_BLOCK_PAD * 2;
         setSize((s) => (s.w === w && s.h === h ? s : { w, h }));
       }}
     >
@@ -496,7 +496,7 @@ const styles = StyleSheet.create({
   activeTitle: { color: "#fff", fontSize: 48, fontWeight: "800", marginBottom: 12 },
   activeSubtitle: { color: "#9ca3af", fontSize: 24, textAlign: "center" },
 
-  zonePad: { flex: 1, padding: 32 },
+  zonePad: { flex: 1, padding: MENU_BLOCK_PAD },
   // The overflowing category fills the leftover height so its item viewport
   // (below the static heading) gets all the remaining space to cycle within.
   cyclingCategory: { flex: 1 },

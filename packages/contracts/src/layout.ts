@@ -329,6 +329,11 @@ export const MENU_FONT_SCALE: Record<MenuFontSize, number> = {
   xlarge: 1.5,
 };
 
+/** Padding (dp) inside every menu block, on each side. Doubles as the bezel /
+ *  panel-edge safety margin. Shared by the TV (zonePad), the editor preview and
+ *  the fit check so all three agree on the usable content area. */
+export const MENU_BLOCK_PAD = 16;
+
 /** Base (medium) menu typography in dp — the original look. Every preset scales
  *  these by MENU_FONT_SCALE, and the pagination metrics are derived from them so
  *  the rendered rows and the page heights can never disagree. */

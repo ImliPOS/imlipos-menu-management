@@ -14,6 +14,7 @@ const previewFont = Roboto({
 });
 import {
   LAYOUT_TEMPLATES,
+  MENU_BLOCK_PAD,
   MENU_FONT_LABELS,
   MENU_FONT_SIZES,
   menuStyle,
@@ -633,7 +634,8 @@ function MenuBlock({
       .filter((c) => c.items.length > 0);
   }, [zone.categoryIds, zone.hiddenItemIds, catById, itemsByCat]);
 
-  const innerDp = blockPx > 0 && scale > 0 ? blockPx / scale - 64 : 0;
+  const innerDp =
+    blockPx > 0 && scale > 0 ? blockPx / scale - MENU_BLOCK_PAD * 2 : 0;
   const { fixed, cycle } = useMemo(() => {
     if (innerDp <= 0) return { fixed: simple, cycle: [] };
     return paginateMenu(simple, innerDp, ms);
@@ -653,7 +655,7 @@ function MenuBlock({
     }
     const el = staticRef.current;
     if (!el || blockPx <= 0 || scale <= 0) return;
-    const available = blockPx - 64 * scale; // block minus 32dp padding each side
+    const available = blockPx - MENU_BLOCK_PAD * 2 * scale; // minus padding each side
     setStaticOverflow(el.scrollHeight > available + 1); // +1px sub-pixel slack
   }, [simple, fontSize, scale, blockPx, sliding]);
 
@@ -690,7 +692,10 @@ function MenuBlock({
 
   return (
     <div ref={ref} className="absolute inset-0 overflow-hidden bg-[#0a0a0a] text-left">
-      <div className="flex h-full w-full flex-col" style={{ padding: 32 * scale }}>
+      <div
+        className="flex h-full w-full flex-col"
+        style={{ padding: MENU_BLOCK_PAD * scale }}
+      >
         {!sliding ? (
           /* Sliding off: render every category statically in a wrapper we
              measure for real overflow (clipped by the block's overflow-hidden). */
