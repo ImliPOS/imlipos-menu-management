@@ -19,7 +19,7 @@ import { MENU_BLOCK_PAD, menuStyle, paginateMenu } from "@imlipos/contracts";
 import type {
   DeviceContent,
   MenuCategoryView,
-  MenuFontSize,
+  MenuFont,
   MenuPageCategory,
   MenuPageItem,
   MenuStyle,
@@ -234,7 +234,7 @@ function Zone({
   sliding,
 }: {
   zone: ResolvedZone;
-  fontSize: MenuFontSize;
+  fontSize: MenuFont;
   sliding: boolean;
 }) {
   if (zone.type === "image") {
@@ -344,7 +344,7 @@ function PagedMenu({
   sliding,
 }: {
   cats: MenuCategoryView[];
-  fontSize: MenuFontSize;
+  fontSize: MenuFont;
   sliding: boolean;
 }) {
   const [size, setSize] = useState({ w: 0, h: 0 });

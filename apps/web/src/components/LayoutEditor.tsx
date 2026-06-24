@@ -15,15 +15,18 @@ const previewFont = Roboto({
 import {
   LAYOUT_TEMPLATES,
   MENU_BLOCK_PAD,
-  MENU_FONT_LABELS,
-  MENU_FONT_SIZES,
+  MENU_SCALE_DEFAULT,
+  MENU_SCALE_MAX,
+  MENU_SCALE_MIN,
+  MENU_SCALE_STEP,
   menuStyle,
   paginateMenu,
+  resolveFontScale,
   type Category,
   type Device,
   type Item,
   type LayoutZone,
-  type MenuFontSize,
+  type MenuFont,
   type MenuPageCategory,
   type MenuPageItem,
   type MenuStyle,
@@ -60,9 +63,21 @@ export function LayoutEditorPanel({
   const [items, setItems] = useState<Item[]>([]);
   const [templateId, setTemplateId] = useState(device.layout?.template ?? "");
   const [zones, setZones] = useState<LayoutZone[]>(device.layout?.zones ?? []);
-  const [fontSize, setFontSize] = useState<MenuFontSize>(
-    device.layout?.fontSize ?? "medium",
+  // Continuous font scale (1 = original). Legacy preset strings on existing
+  // layouts are normalised to a number so the +/- control starts in the right
+  // place.
+  const [fontScale, setFontScale] = useState<number>(() =>
+    resolveFontScale(device.layout?.fontSize ?? MENU_SCALE_DEFAULT),
   );
+  const adjustFont = (delta: number) => {
+    setFontScale((v) =>
+      Math.min(
+        MENU_SCALE_MAX,
+        Math.max(MENU_SCALE_MIN, Math.round((v + delta) * 100) / 100),
+      ),
+    );
+    setSaved(false);
+  };
   const [sliding, setSliding] = useState(device.layout?.sliding ?? true);
   // Which menu blocks overflow at the current size — only meaningful with
   // sliding off, where every item must fit. Keyed by zone id.
@@ -222,7 +237,7 @@ export function LayoutEditorPanel({
       await api.updateDeviceLayout(device.id, {
         template: templateId,
         zones,
-        fontSize,
+        fontSize: fontScale,
         sliding,
       });
       setSaved(true);
@@ -279,28 +294,41 @@ export function LayoutEditorPanel({
       {zones.some((z) => z.type === "menu") && (
         <div className="space-y-2">
           <Label>Menu font size</Label>
-          <div className="flex flex-wrap gap-2">
-            {MENU_FONT_SIZES.map((size) => (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              aria-label="Decrease menu font size"
+              onClick={() => adjustFont(-MENU_SCALE_STEP)}
+              disabled={fontScale <= MENU_SCALE_MIN + 1e-9}
+              className="flex h-9 w-9 items-center justify-center rounded-md border border-input bg-background text-lg leading-none hover:bg-secondary/60 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              −
+            </button>
+            <span className="w-16 text-center text-sm tabular-nums">
+              {Math.round(fontScale * 100)}%
+            </span>
+            <button
+              type="button"
+              aria-label="Increase menu font size"
+              onClick={() => adjustFont(MENU_SCALE_STEP)}
+              disabled={fontScale >= MENU_SCALE_MAX - 1e-9}
+              className="flex h-9 w-9 items-center justify-center rounded-md border border-input bg-background text-lg leading-none hover:bg-secondary/60 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              +
+            </button>
+            {Math.abs(fontScale - MENU_SCALE_DEFAULT) > 1e-9 && (
               <button
-                key={size}
                 type="button"
-                onClick={() => {
-                  setFontSize(size);
-                  setSaved(false);
-                }}
-                className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
-                  fontSize === size
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-input bg-background hover:bg-secondary/60"
-                }`}
+                onClick={() => adjustFont(MENU_SCALE_DEFAULT - fontScale)}
+                className="ml-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-secondary/60"
               >
-                {MENU_FONT_LABELS[size]}
+                Reset
               </button>
-            ))}
+            )}
           </div>
           <p className="text-xs text-muted-foreground">
-            Applies to every menu block on this display. Larger sizes fit fewer
-            items per page, so they cycle more.
+            Applies to every menu block on this display. Increase until your
+            items fit; larger sizes fit fewer items per page, so they cycle more.
           </p>
         </div>
       )}
@@ -355,7 +383,7 @@ export function LayoutEditorPanel({
                     <MenuBlock
                       zone={z}
                       scale={scale}
-                      fontSize={fontSize}
+                      fontSize={fontScale}
                       sliding={sliding}
                       catById={catById}
                       itemsByCat={itemsByCat}
@@ -597,7 +625,7 @@ function MenuBlock({
 }: {
   zone: LayoutZone;
   scale: number;
-  fontSize: MenuFontSize;
+  fontSize: MenuFont;
   sliding: boolean;
   catById: Map<string, Category>;
   itemsByCat: Map<string, Item[]>;

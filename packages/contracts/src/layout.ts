@@ -33,7 +33,7 @@ export const MENU_FONT_SIZES = ["xsmall", "small", "medium", "large", "xlarge"] 
 export const menuFontSize = z.enum(MENU_FONT_SIZES);
 export type MenuFontSize = (typeof MENU_FONT_SIZES)[number];
 
-/** Human labels for the presets (shared by the editor UI). */
+/** Human labels for the legacy presets (kept for back-compat display). */
 export const MENU_FONT_LABELS: Record<MenuFontSize, string> = {
   xsmall: "Very small",
   small: "Small",
@@ -42,11 +42,30 @@ export const MENU_FONT_LABELS: Record<MenuFontSize, string> = {
   xlarge: "Very large",
 };
 
+/** Menu font is now a continuous scale multiplier (1 = the original "medium"
+ *  size). The editor exposes +/- stepping between these bounds; older layouts
+ *  may still hold a preset string, which resolveFontScale() maps to a number. */
+export const MENU_SCALE_MIN = 0.5;
+export const MENU_SCALE_MAX = 1.6;
+export const MENU_SCALE_STEP = 0.05;
+export const MENU_SCALE_DEFAULT = 1;
+
+/** A menu font value: the new numeric scale, or a legacy preset string. */
+export const menuFont = z.union([z.enum(MENU_FONT_SIZES), z.number().positive()]);
+export type MenuFont = MenuFontSize | number;
+
+/** Resolve any stored font value to a clamped numeric scale multiplier. */
+export function resolveFontScale(f: MenuFont = MENU_SCALE_DEFAULT): number {
+  const n = typeof f === "number" ? f : (MENU_FONT_SCALE[f] ?? MENU_SCALE_DEFAULT);
+  return Math.min(MENU_SCALE_MAX, Math.max(MENU_SCALE_MIN, n));
+}
+
 export const deviceLayout = z.object({
   template: z.string(),
   zones: z.array(layoutZone),
-  /** Per-display menu font size. Defaults to "medium" (the original sizing). */
-  fontSize: menuFontSize.default("medium"),
+  /** Per-display menu font scale (1 = original). Accepts a legacy preset string
+   *  too; resolveFontScale() normalises either to a number. */
+  fontSize: menuFont.default(MENU_SCALE_DEFAULT),
   /** When true (default), an overflowing menu block cycles its items in a
    *  sliding transition. When false, every item must fit statically — the editor
    *  blocks saving a layout whose blocks overflow with sliding off. */
@@ -83,9 +102,9 @@ export const deviceContent = z.object({
   /** Intended display orientation (from the assigned screen). The TV rotates
    *  its whole canvas 90° when this doesn't match the physical panel. */
   orientation: z.enum(["landscape", "portrait"]).default("landscape"),
-  /** Per-display menu font size (from the layout). Drives both the rendered
+  /** Per-display menu font scale (from the layout). Drives both the rendered
    *  text and the pagination metrics via menuStyle(). */
-  fontSize: menuFontSize.default("medium"),
+  fontSize: menuFont.default(MENU_SCALE_DEFAULT),
   /** When true, overflowing menu blocks cycle their items; when false they are
    *  rendered statically (the editor guarantees they fit before saving). */
   sliding: z.boolean().default(true),
@@ -368,9 +387,10 @@ export interface MenuStyle {
   safeBottom: number;
 }
 
-/** Build the typography + metrics for a font preset (defaults to medium). */
-export function menuStyle(size: MenuFontSize = "medium"): MenuStyle {
-  const s = MENU_FONT_SCALE[size];
+/** Build the typography + metrics for a font value (scale number or legacy
+ *  preset string; defaults to the original "medium" sizing). */
+export function menuStyle(size: MenuFont = MENU_SCALE_DEFAULT): MenuStyle {
+  const s = resolveFontScale(size);
   const r = (n: number) => Math.round(n * s);
   const b = BASE_MENU_STYLE;
   const titleLine = r(b.titleLine);
