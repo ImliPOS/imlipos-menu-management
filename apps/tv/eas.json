@@ -4,10 +4,12 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "channel": "development",
       "android": { "buildType": "apk" }
     },
     "preview": {
       "distribution": "internal",
+      "channel": "preview",
       "android": { "buildType": "apk" },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://imlipos-menu-management.onrender.com",
@@ -16,6 +18,7 @@
     },
     "production": {
       "android": { "buildType": "app-bundle" },
+      "channel": "production",
       "autoIncrement": true
     }
   },

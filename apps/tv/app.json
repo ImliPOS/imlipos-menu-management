@@ -6,6 +6,13 @@
     "platforms": [
       "android"
     ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/c17d31f2-d2bd-43ad-8bc2-b73fbcdb97cc",
+      "fallbackToCacheTimeout": 0
+    },
     "android": {
       "package": "com.imlipos.tv",
       "backgroundColor": "#0a0a0a"
