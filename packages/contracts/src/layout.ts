@@ -383,7 +383,12 @@ export function menuStyle(size: MenuFontSize = "medium"): MenuStyle {
     catGap: r(b.catGap),
     titleH: titleLine + titleGap,
     itemH,
-    safeBottom: itemH,
+    // No extra bottom reserve: every menu block already renders with 32dp of
+    // padding on each side (zonePad on the TV, the padded preview canvas), which
+    // is the bezel/nav-bar safety margin. Reserving an additional full item-row
+    // here double-counted that space and made content that visibly fits within
+    // the padded block wrongly fail the "does not fit" check.
+    safeBottom: 0,
   };
 }
 
