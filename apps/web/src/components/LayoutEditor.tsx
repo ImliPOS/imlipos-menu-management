@@ -1,7 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Roboto } from "next/font/google";
 import { UploadCloud, X } from "lucide-react";
+
+// The TV renders the menu in the Android system font (Roboto). Render the
+// preview in the same typeface so glyph widths, truncation points and the
+// price-column positions match the real panel exactly.
+const previewFont = Roboto({
+  subsets: ["latin"],
+  weight: ["400", "500", "700", "900"],
+  display: "swap",
+});
 import {
   LAYOUT_TEMPLATES,
   MENU_FONT_LABELS,
@@ -322,7 +332,7 @@ export function LayoutEditorPanel({
             <Label>Preview (click a block)</Label>
             <div
               ref={canvasRef}
-              className="relative mt-2 w-full max-w-xl overflow-hidden rounded-lg border border-border bg-background"
+              className={`relative mt-2 w-full max-w-xl overflow-hidden rounded-lg border border-border bg-background ${previewFont.className}`}
               style={{ aspectRatio: String(aspect) }}
             >
               {zones.map((z) => (
