@@ -9,3 +9,5 @@ dist/
 .DS_Store
 drizzle/meta/
 coverage/
+.vercel
+*.tsbuildinfo
