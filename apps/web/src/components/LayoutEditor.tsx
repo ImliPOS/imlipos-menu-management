@@ -646,6 +646,9 @@ function MenuBlock({
   // metric pagination, which drives the pin/cycle split.
   const staticRef = useRef<HTMLDivElement>(null);
   const [staticOverflow, setStaticOverflow] = useState(false);
+  const [dbg, setDbg] = useState<{ sh: number; av: number; ch: number } | null>(
+    null,
+  );
   useEffect(() => {
     if (sliding) {
       setStaticOverflow(false);
@@ -655,7 +658,14 @@ function MenuBlock({
     if (!el || blockPx <= 0 || scale <= 0) return;
     const available = blockPx - 64 * scale; // block minus 32dp padding each side
     setStaticOverflow(el.scrollHeight > available + 1); // +1px sub-pixel slack
+    setDbg({ sh: el.scrollHeight, av: available, ch: el.clientHeight });
   }, [simple, fontSize, scale, blockPx, sliding]);
+
+  // Diagnostic overlay — append ?fitdebug=1 to the URL to show the real numbers.
+  const [fitDebug, setFitDebug] = useState(false);
+  useEffect(() => {
+    setFitDebug(new URLSearchParams(window.location.search).has("fitdebug"));
+  }, []);
 
   // Sliding on → metric pagination leaves a cycling tail; off → measured fit.
   const overflows = sliding
@@ -735,6 +745,13 @@ function MenuBlock({
       {!sliding && overflows && (
         <span className="pointer-events-none absolute bottom-1 right-1 rounded bg-red-600/90 px-1.5 py-0.5 text-[10px] font-medium text-white">
           Does not fit
+        </span>
+      )}
+      {fitDebug && !sliding && dbg && (
+        <span className="pointer-events-none absolute left-0.5 top-0.5 z-30 rounded bg-black/85 px-1 font-mono text-[9px] leading-tight text-emerald-400">
+          {fontSize} sh{Math.round(dbg.sh)} av{Math.round(dbg.av)} ch
+          {Math.round(dbg.ch)} bpx{Math.round(blockPx)} sc{scale.toFixed(2)} if
+          {Math.round(ms.itemFont)} ovf{overflows ? "1" : "0"}
         </span>
       )}
     </div>
