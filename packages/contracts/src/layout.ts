@@ -418,7 +418,13 @@ export function paginateMenu(
   let i = 0;
   for (; i < nonEmpty.length; i++) {
     const cat = nonEmpty[i]!;
-    const need = m.titleH + cat.items.length * m.itemH + m.catGap;
+    // catGap separates a category from the one above it, so a run of N pinned
+    // categories needs only N-1 gaps — the last one has no category below it.
+    // Counting a trailing gap reserved ~one catGap of height that nothing
+    // renders into, which falsely flagged a block as overflowing ("doesn't
+    // fit") while visible space remained below the last row.
+    const sep = fixed.length > 0 ? m.catGap : 0;
+    const need = sep + m.titleH + cat.items.length * m.itemH;
     if (fixedUsed + need > usable) break;
     fixed.push({ id: cat.id, name: cat.name, items: cat.items });
     fixedUsed += need;
