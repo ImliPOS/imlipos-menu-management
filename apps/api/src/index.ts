@@ -16,6 +16,15 @@ app.use(cors({ origin: corsOrigin, credentials: true }));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
+// Reports the git commit this instance was built from (Render injects
+// RENDER_GIT_COMMIT). Lets us verify which code is actually deployed.
+app.get("/version", (_req, res) =>
+  res.json({
+    commit: process.env.RENDER_GIT_COMMIT ?? "unknown",
+    branch: process.env.RENDER_GIT_BRANCH ?? null,
+  }),
+);
+
 app.use("/shops", shopsRouter);
 app.use("/categories", categoriesRouter);
 app.use("/items", itemsRouter);
