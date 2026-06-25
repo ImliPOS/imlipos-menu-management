@@ -207,6 +207,18 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
     ],
   },
   {
+    id: "octa-columns",
+    label: "8 columns",
+    orientation: "landscape",
+    zones: Array.from({ length: 8 }, (_, i) => ({
+      x: i * 12.5,
+      y: 0,
+      w: 12.5,
+      h: 100,
+      type: "menu" as ZoneType,
+    })),
+  },
+  {
     id: "grid-2x2",
     label: "2×2 grid",
     orientation: "landscape",
