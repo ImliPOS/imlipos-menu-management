@@ -257,8 +257,10 @@ export function LayoutEditorPanel({
       (z) => z.type === "menu" && z.categoryIds.length > 0 && overflowByZone[z.id],
     );
 
-  // A category may only live in one menu/featured block. Collect the ones
-  // already claimed by *other* blocks so we can disable them here.
+  // A category MAY appear in more than one menu/featured block (e.g. to split a
+  // long category across columns, each showing a different subset of its items
+  // via the block's own hiddenItemIds). We collect the ones already used by
+  // *other* blocks only to show an informational hint — not to disable them.
   const usedElsewhere = useMemo(() => {
     const m = new Map<string, string>(); // categoryId -> owning zone id
     for (const z of zones) {
@@ -445,33 +447,28 @@ export function LayoutEditorPanel({
                       <li className="text-sm text-muted-foreground">No categories yet.</li>
                     )}
                     {categories.map((c) => {
-                      const takenBy = usedElsewhere.get(c.id);
-                      const disabled =
-                        !!takenBy && !sel.categoryIds.includes(c.id);
                       const enabled = sel.categoryIds.includes(c.id);
+                      // A category can be added to multiple blocks; flag when it
+                      // already shows in another so the operator can split items.
+                      const alsoElsewhere =
+                        usedElsewhere.has(c.id) && !enabled;
                       return (
                         <li key={c.id}>
-                          <label
-                            className={`flex items-center gap-2 text-sm ${
-                              disabled
-                                ? "cursor-not-allowed text-muted-foreground"
-                                : ""
-                            }`}
-                          >
+                          <label className="flex items-center gap-2 text-sm">
                             <input
                               type="checkbox"
-                              disabled={disabled}
                               checked={enabled}
                               onChange={() => toggleCat(sel.id, c.id)}
                             />
                             {c.name}
-                            {disabled && (
-                              <span className="text-xs italic opacity-70">
-                                in another block
+                            {alsoElsewhere && (
+                              <span className="text-xs italic text-muted-foreground opacity-70">
+                                also in another block
                               </span>
                             )}
                           </label>
-                          {/* Once a category is on, pick which of its items show. */}
+                          {/* Once a category is on, pick which of its items show
+                              in THIS block (independent of other blocks). */}
                           {sel.type === "menu" && enabled && (
                             <CategoryItemPicker
                               items={itemsByCat.get(c.id) ?? []}
