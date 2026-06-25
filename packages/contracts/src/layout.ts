@@ -207,6 +207,18 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
     ],
   },
   {
+    id: "hexa-columns",
+    label: "6 columns",
+    orientation: "landscape",
+    zones: Array.from({ length: 6 }, (_, i) => ({
+      x: (i * 100) / 6,
+      y: 0,
+      w: 100 / 6,
+      h: 100,
+      type: "menu" as ZoneType,
+    })),
+  },
+  {
     id: "octa-columns",
     label: "8 columns",
     orientation: "landscape",
