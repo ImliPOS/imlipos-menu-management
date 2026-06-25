@@ -229,6 +229,19 @@ export function LayoutEditorPanel({
     setSaved(false);
   }
 
+  // Items of a category currently *shown* in blocks other than `zoneId`. These
+  // are locked from being added here so the same item isn't displayed twice.
+  function shownInOtherBlocks(catId: string, zoneId: string): Set<string> {
+    const ids = new Set<string>();
+    const catItems = itemsByCat.get(catId) ?? [];
+    for (const z of zones) {
+      if (z.id === zoneId || !z.categoryIds.includes(catId)) continue;
+      const hidden = new Set(z.hiddenItemIds ?? []);
+      for (const it of catItems) if (!hidden.has(it.id)) ids.add(it.id);
+    }
+    return ids;
+  }
+
   // Toggle a single item's visibility within its block (checked = shown).
   function toggleItem(zoneId: string, itemId: string) {
     setZones((prev) =>
@@ -494,6 +507,7 @@ export function LayoutEditorPanel({
                             <CategoryItemPicker
                               items={itemsByCat.get(c.id) ?? []}
                               hiddenIds={new Set(sel.hiddenItemIds ?? [])}
+                              lockedIds={shownInOtherBlocks(c.id, sel.id)}
                               onToggle={(itemId) => toggleItem(sel.id, itemId)}
                             />
                           )}
@@ -587,17 +601,29 @@ export function LayoutEditorPanel({
 function CategoryItemPicker({
   items,
   hiddenIds,
+  lockedIds,
   onToggle,
 }: {
   items: Item[];
   hiddenIds: Set<string>;
+  /** Items already shown in another block — can't be added here (would dupe).
+   *  Still uncheckable if somehow shown in both. */
+  lockedIds: Set<string>;
   onToggle: (itemId: string) => void;
 }) {
-  const shown = items.reduce((n, it) => n + (hiddenIds.has(it.id) ? 0 : 1), 0);
+  const shownHere = (it: Item) => !hiddenIds.has(it.id);
+  const shown = items.filter(shownHere).length;
+  const selectable = items.filter((it) => !(lockedIds.has(it.id) && !shownHere(it))).length;
   return (
     <details className="ml-6 mt-1">
       <summary className="cursor-pointer select-none text-xs text-muted-foreground">
-        Items — {shown}/{items.length} shown
+        Items — {shown}/{selectable} shown
+        {selectable < items.length && (
+          <span className="opacity-70">
+            {" "}
+            · {items.length - selectable} in another block
+          </span>
+        )}
       </summary>
       {items.length === 0 ? (
         <p className="mt-1 text-xs text-muted-foreground">
@@ -605,21 +631,35 @@ function CategoryItemPicker({
         </p>
       ) : (
         <ul className="mt-1 space-y-1">
-          {items.map((it) => (
-            <li key={it.id}>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={!hiddenIds.has(it.id)}
-                  onChange={() => onToggle(it.id)}
-                />
-                <span className="min-w-0 flex-1 truncate">{it.name}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  ₹{Number(it.price)}
-                </span>
-              </label>
-            </li>
-          ))}
+          {items.map((it) => {
+            // Lock from *adding* when shown elsewhere and not already shown here.
+            const locked = lockedIds.has(it.id) && !shownHere(it);
+            return (
+              <li key={it.id}>
+                <label
+                  className={`flex items-center gap-2 text-sm ${
+                    locked ? "cursor-not-allowed opacity-50" : ""
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    disabled={locked}
+                    checked={shownHere(it)}
+                    onChange={() => onToggle(it.id)}
+                  />
+                  <span className="min-w-0 flex-1 truncate">{it.name}</span>
+                  {locked && (
+                    <span className="shrink-0 text-[10px] italic text-muted-foreground">
+                      in another block
+                    </span>
+                  )}
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    ₹{Number(it.price)}
+                  </span>
+                </label>
+              </li>
+            );
+          })}
         </ul>
       )}
     </details>
