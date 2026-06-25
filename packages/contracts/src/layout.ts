@@ -229,6 +229,36 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
       { x: 50, y: 50, w: 50, h: 50, type: "video" },
     ],
   },
+  {
+    // 2 stacked images on the left; the right half's two menu sectors are each
+    // split into side-by-side columns -> 4 narrow menu columns.
+    id: "img2-menu4-cols",
+    label: "2 images + 4 menu columns",
+    orientation: "landscape",
+    zones: [
+      { x: 0, y: 0, w: 50, h: 50, type: "image" },
+      { x: 0, y: 50, w: 50, h: 50, type: "image" },
+      { x: 50, y: 0, w: 25, h: 50, type: "menu" },
+      { x: 75, y: 0, w: 25, h: 50, type: "menu" },
+      { x: 50, y: 50, w: 25, h: 50, type: "menu" },
+      { x: 75, y: 50, w: 25, h: 50, type: "menu" },
+    ],
+  },
+  {
+    // 2 stacked images on the left; the right half's two menu sectors are each
+    // split into stacked halves -> 4 short, wide menu rows.
+    id: "img2-menu4-rows",
+    label: "2 images + 4 menu rows",
+    orientation: "landscape",
+    zones: [
+      { x: 0, y: 0, w: 50, h: 50, type: "image" },
+      { x: 0, y: 50, w: 50, h: 50, type: "image" },
+      { x: 50, y: 0, w: 50, h: 25, type: "menu" },
+      { x: 50, y: 25, w: 50, h: 25, type: "menu" },
+      { x: 50, y: 50, w: 50, h: 25, type: "menu" },
+      { x: 50, y: 75, w: 50, h: 25, type: "menu" },
+    ],
+  },
   // Portrait
   {
     id: "full-menu-p",
