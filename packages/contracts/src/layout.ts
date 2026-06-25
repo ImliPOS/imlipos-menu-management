@@ -45,8 +45,8 @@ export const MENU_FONT_LABELS: Record<MenuFontSize, string> = {
 /** Menu font is now a continuous scale multiplier (1 = the original "medium"
  *  size). The editor exposes +/- stepping between these bounds; older layouts
  *  may still hold a preset string, which resolveFontScale() maps to a number. */
-export const MENU_SCALE_MIN = 0.5;
-export const MENU_SCALE_MAX = 1.6;
+export const MENU_SCALE_MIN = 0.2;
+export const MENU_SCALE_MAX = 1.0;
 export const MENU_SCALE_STEP = 0.05;
 export const MENU_SCALE_DEFAULT = 1;
 

@@ -78,6 +78,24 @@ export function LayoutEditorPanel({
     );
     setSaved(false);
   };
+  // Editable percentage field (kept in sync with fontScale; committed on
+  // blur/Enter, clamped to [MIN, MAX]).
+  const PCT_MIN = Math.round(MENU_SCALE_MIN * 100);
+  const PCT_MAX = Math.round(MENU_SCALE_MAX * 100);
+  const [pctText, setPctText] = useState(String(Math.round(fontScale * 100)));
+  useEffect(() => {
+    setPctText(String(Math.round(fontScale * 100)));
+  }, [fontScale]);
+  const commitPct = () => {
+    const n = parseInt(pctText, 10);
+    if (Number.isFinite(n)) {
+      const clamped = Math.min(PCT_MAX, Math.max(PCT_MIN, n));
+      setFontScale(clamped / 100);
+      setSaved(false);
+    } else {
+      setPctText(String(Math.round(fontScale * 100)));
+    }
+  };
   const [sliding, setSliding] = useState(device.layout?.sliding ?? true);
   // Which menu blocks overflow at the current size — only meaningful with
   // sliding off, where every item must fit. Keyed by zone id.
@@ -340,9 +358,25 @@ export function LayoutEditorPanel({
             >
               −
             </button>
-            <span className="w-16 text-center text-sm tabular-nums">
-              {Math.round(fontScale * 100)}%
-            </span>
+            <div className="flex w-16 items-center justify-center gap-0.5">
+              <input
+                value={pctText}
+                onChange={(e) =>
+                  setPctText(e.target.value.replace(/[^0-9]/g, "").slice(0, 3))
+                }
+                onBlur={commitPct}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    commitPct();
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
+                inputMode="numeric"
+                aria-label={`Menu font size percent (${PCT_MIN}-${PCT_MAX})`}
+                className="w-9 rounded border border-input bg-background py-0.5 text-center text-sm tabular-nums outline-none focus:border-foreground"
+              />
+              <span className="text-sm text-muted-foreground">%</span>
+            </div>
             <button
               type="button"
               aria-label="Increase menu font size"
