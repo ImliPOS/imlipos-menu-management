@@ -15,6 +15,7 @@ import {
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import * as ScreenOrientation from "expo-screen-orientation";
+import * as Updates from "expo-updates";
 import { MENU_BLOCK_PAD, menuStyle, paginateMenu } from "@imlipos/contracts";
 import type {
   DeviceContent,
@@ -132,6 +133,32 @@ export function MenuScreen({
       socketRef.current?.disconnect();
     };
   }, [deviceToken, screenId, refresh, unpair]);
+
+  // Auto-apply OTA updates. A kiosk rarely restarts, and expo-updates only
+  // applies a downloaded update on the next launch — so we poll for updates and
+  // reload when one is available, keeping the panel on the latest JS without a
+  // manual restart. (No-op in dev / when updates are disabled.)
+  useEffect(() => {
+    if (!Updates.isEnabled) return;
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const res = await Updates.checkForUpdateAsync();
+        if (!cancelled && res.isAvailable) {
+          await Updates.fetchUpdateAsync();
+          await Updates.reloadAsync();
+        }
+      } catch {
+        // offline / transient — try again next tick.
+      }
+    };
+    check();
+    const id = setInterval(check, 15 * 60 * 1000); // every 15 min
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
 
   // Lock the panel to the display's configured orientation so a tablet's sensor
   // (e.g. lying flat on a table, where the OS reverts to portrait) can't flip
