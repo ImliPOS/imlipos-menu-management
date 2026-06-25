@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Trash2Icon } from "lucide-react";
+import { ArrowLeft, Check, PencilIcon, Trash2Icon, X } from "lucide-react";
 import type { Device, Orientation, Screen } from "@imlipos/contracts";
 import { api } from "@/lib/api";
 import { PageSpinner } from "@/components/ui/spinner";
@@ -32,6 +32,9 @@ export default function DeviceDetail() {
   const [screen, setScreen] = useState<Screen | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirmText, setConfirmText] = useState("");
+  const [renaming, setRenaming] = useState(false);
+  const [nameInput, setNameInput] = useState("");
+  const [savingName, setSavingName] = useState(false);
 
   async function load() {
     const [devices, screens] = await Promise.all([
@@ -67,6 +70,26 @@ export default function DeviceDetail() {
     router.replace("/screens/pair");
   }
 
+  function startRename() {
+    setNameInput(device!.name ?? "");
+    setRenaming(true);
+  }
+  async function saveRename() {
+    const next = nameInput.trim();
+    if (!next || next === device!.name) {
+      setRenaming(false);
+      return;
+    }
+    setSavingName(true);
+    try {
+      await api.renameDevice(device!.id, next);
+      await load();
+      setRenaming(false);
+    } finally {
+      setSavingName(false);
+    }
+  }
+
   async function setOrientation(orientation: Orientation) {
     if (!screen || screen.orientation === orientation) return;
     await api.updateScreen(screen.id, { orientation });
@@ -84,7 +107,54 @@ export default function DeviceDetail() {
 
       <div className="mb-6 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-semibold">{label}</h1>
+          {renaming ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void saveRename();
+              }}
+              className="flex items-center gap-2"
+            >
+              <Input
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                placeholder="Display name"
+                maxLength={80}
+                autoFocus
+                disabled={savingName}
+                className="h-9 w-56 text-lg"
+                onKeyDown={(e) => e.key === "Escape" && setRenaming(false)}
+              />
+              <Button
+                type="submit"
+                size="icon"
+                disabled={savingName}
+                aria-label="Save name"
+              >
+                <Check className="size-4" />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                disabled={savingName}
+                onClick={() => setRenaming(false)}
+                aria-label="Cancel rename"
+              >
+                <X className="size-4" />
+              </Button>
+            </form>
+          ) : (
+            <button
+              type="button"
+              onClick={startRename}
+              title="Rename display"
+              className="group inline-flex items-center gap-2 rounded-md text-left hover:opacity-90"
+            >
+              <h1 className="text-2xl font-semibold">{label}</h1>
+              <PencilIcon className="size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+            </button>
+          )}
           <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <span className={`h-2 w-2 rounded-full ${online ? "bg-green-400" : "bg-muted-foreground"}`} />
             {online ? "Online" : "Offline"}

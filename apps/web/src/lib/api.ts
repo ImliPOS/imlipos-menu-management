@@ -101,6 +101,11 @@ export const api = {
   // devices
   listDevices: () => call<Device[]>("/devices"),
   removeDevice: (id: string) => call<void>(`/devices/${id}`, { method: "DELETE" }),
+  renameDevice: (id: string, name: string) =>
+    call<{ ok: true; name: string }>(`/devices/${id}/name`, {
+      method: "PATCH",
+      body: JSON.stringify({ name }),
+    }),
   updateDeviceLayout: (id: string, layout: DeviceLayout) =>
     call<{ ok: true }>(`/devices/${id}/layout`, {
       method: "PATCH",

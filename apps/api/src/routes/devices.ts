@@ -205,6 +205,20 @@ devicesRouter.patch("/:id/screen", requireOwner, async (req, res) => {
   res.json({ ok: true });
 });
 
+/** Owner: rename a display. */
+devicesRouter.patch("/:id/name", requireOwner, async (req, res) => {
+  const raw = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+  const name = raw.slice(0, 80);
+  if (!name) return res.status(400).json({ error: "Name required" });
+  const [row] = await db
+    .update(devices)
+    .set({ name })
+    .where(and(eq(devices.id, req.params.id), eq(devices.shopId, shopId(req))))
+    .returning({ id: devices.id });
+  if (!row) return res.status(404).json({ error: "Device not found" });
+  res.json({ ok: true, name });
+});
+
 /** Owner: revoke a device (kills its token on next call). */
 devicesRouter.post("/:id/revoke", requireOwner, async (req, res) => {
   await db
