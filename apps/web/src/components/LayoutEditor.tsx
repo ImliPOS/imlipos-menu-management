@@ -193,7 +193,28 @@ export function LayoutEditorPanel({
         if (z.id !== zoneId) return z;
         const has = z.categoryIds.includes(catId);
         if (!has) {
-          return { ...z, categoryIds: [...z.categoryIds, catId] };
+          // Adding a category. If it already shows in other block(s), default
+          // THIS block to only the items not shown elsewhere — so splitting a
+          // long category across columns doesn't duplicate rows.
+          const catItemIds = new Set(
+            (itemsByCat.get(catId) ?? []).map((i) => i.id),
+          );
+          const shownElsewhere = new Set<string>();
+          for (const other of prev) {
+            if (other.id === zoneId || !other.categoryIds.includes(catId))
+              continue;
+            const otherHidden = new Set(other.hiddenItemIds ?? []);
+            for (const id of catItemIds)
+              if (!otherHidden.has(id)) shownElsewhere.add(id);
+          }
+          const keptHidden = (z.hiddenItemIds ?? []).filter(
+            (id) => !catItemIds.has(id),
+          );
+          return {
+            ...z,
+            categoryIds: [...z.categoryIds, catId],
+            hiddenItemIds: [...keptHidden, ...shownElsewhere],
+          };
         }
         // Removing a category: drop it and forget its per-item choices so a
         // later re-add starts from "show all" again.
