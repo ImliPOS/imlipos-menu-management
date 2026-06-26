@@ -24,6 +24,11 @@ export const layoutZone = z.object({
   hiddenItemIds: z.array(z.string()).default([]),
   /** For image / video zones: the media URL. */
   mediaUrl: z.string().url().nullable().default(null),
+  /** True when this block's content was produced by the auto-flow distributor
+   *  (a "continuation" slot receiving an earlier block's overflow). Operators
+   *  don't edit these directly; flowCategoriesAcrossZones() owns them. The TV
+   *  and deviceContent ignore this flag — they only read categoryIds/hidden. */
+  autoFilled: z.boolean().default(false),
 });
 export type LayoutZone = z.infer<typeof layoutZone>;
 
@@ -70,6 +75,11 @@ export const deviceLayout = z.object({
    *  sliding transition. When false, every item must fit statically — the editor
    *  blocks saving a layout whose blocks overflow with sliding off. */
   sliding: z.boolean().default(true),
+  /** When true (default), a category whose items overflow its block spills into
+   *  the following empty/continuation menu blocks (in reading order) — see
+   *  flowCategoriesAcrossZones(). When false, every block keeps exactly its own
+   *  assigned items (the original manual model). */
+  autoFlow: z.boolean().default(true),
 });
 export type DeviceLayout = z.infer<typeof deviceLayout>;
 
@@ -576,4 +586,191 @@ function pageItems(
     pages.push(items.slice(k, k + perPage));
   }
   return pages.length ? pages : [[]];
+}
+
+/** ---- Auto-flow: spill a category's overflow into following empty blocks ----
+ *
+ *  Each menu block stores its own categoryIds + hiddenItemIds; the TV renders
+ *  blocks independently. flowCategoriesAcrossZones() automates the manual
+ *  "split a long category across columns" workflow: it computes, per block, how
+ *  many items fit (reusing paginateMenu — the exact metrics the TV uses) and
+ *  pushes the remainder into the following empty / continuation blocks, in
+ *  reading order. The result is plain categoryIds/hiddenItemIds, so the API and
+ *  TV need no changes.
+ */
+
+/** A category as the distributor needs it: its available items (in display
+ *  order) with the fields the fit metrics care about. */
+export interface FlowCatalogCategory {
+  id: string;
+  name: string;
+  items: MenuPageItem[];
+}
+
+export interface FlowOptions {
+  /** The display's logical canvas height in dp (px / pixelRatio) for the
+   *  intended orientation. Each zone's content height is (h% × this) − padding. */
+  logicalHeightDp: number;
+  /** Per-display menu font scale (drives the same metrics as the TV). */
+  fontSize?: MenuFont;
+  /** Available items per category id, in display order. */
+  catalog: Map<string, FlowCatalogCategory>;
+}
+
+/** Menu zones sorted in reading order: top-to-bottom, then left-to-right.
+ *  Non-menu zones are excluded (they don't take part in the flow). */
+export function zonesInReadingOrder(zones: LayoutZone[]): LayoutZone[] {
+  const EPS = 0.5; // percentage tolerance for "same row"
+  return zones
+    .filter((z) => z.type === "menu")
+    .slice()
+    .sort((a, b) => (Math.abs(a.y - b.y) <= EPS ? a.x - b.x : a.y - b.y));
+}
+
+/** Build paginate-ready categories from a run of pending items, grouping
+ *  consecutive items that share a category under one heading. */
+function groupToCats(
+  run: Array<{ catId: string; name: string; item: MenuPageItem }>,
+): PaginateCategory[] {
+  const cats: PaginateCategory[] = [];
+  for (const p of run) {
+    let last = cats[cats.length - 1];
+    if (!last || last.id !== p.catId) {
+      last = { id: p.catId, name: p.name, items: [] };
+      cats.push(last);
+    }
+    last.items.push(p.item);
+  }
+  return cats;
+}
+
+/** The item ids that fit in `innerH` dp, using the same pagination the TV uses:
+ *  fully-fitting categories plus the first page of the first overflowing one.
+ *  Always a contiguous prefix of the input, so callers can split on it. */
+function fittingIds(
+  cats: PaginateCategory[],
+  innerH: number,
+  m: MenuStyle,
+): Set<string> {
+  const { fixed, cycle } = paginateMenu(cats, innerH, m);
+  const kept = new Set<string>();
+  for (const c of fixed) for (const it of c.items) kept.add(it.id);
+  const firstPage = cycle[0]?.itemPages[0];
+  if (firstPage) for (const it of firstPage) kept.add(it.id);
+  return kept;
+}
+
+/**
+ * Recompute every menu zone's categoryIds/hiddenItemIds so a block's overflow
+ * spills into the following empty / continuation blocks (reading order). Pure
+ * and idempotent: re-running on its own output yields the same zones.
+ *
+ *  - A *source* block (autoFilled === false, has categoryIds) keeps the items
+ *    that fit; the rest become its overflow.
+ *  - The blocks after it that are empty or previously auto-filled become
+ *    *continuation slots* that drain the overflow until full.
+ *  - A block with its own category ends the upstream flow.
+ *  - Overflow left after the last slot stays in that slot (cycles / "doesn't
+ *    fit" as today); if there was no slot at all, it stays in the source.
+ */
+export function flowCategoriesAcrossZones(
+  zones: LayoutZone[],
+  { logicalHeightDp, fontSize, catalog }: FlowOptions,
+): LayoutZone[] {
+  const m = menuStyle(fontSize);
+  const out = zones.map((z) => ({ ...z }));
+  const byId = new Map(out.map((z) => [z.id, z]));
+
+  // Per-zone working state; categoryIds/hiddenItemIds are derived from it last.
+  type Work = { catIds: string[]; shown: Set<string>; autoFilled: boolean };
+  const work = new Map<string, Work>();
+
+  const innerHeight = (z: LayoutZone) =>
+    (z.h / 100) * logicalHeightDp - MENU_BLOCK_PAD * 2;
+
+  type Pending = { catId: string; name: string; item: MenuPageItem };
+  let pending: Pending[] = [];
+  let lastSlotId: string | null = null; // last continuation slot in the open region
+  let sourceId: string | null = null; // source that opened the region
+
+  // Re-show leftover overflow: into the last slot if one exists (it overflows
+  // there), otherwise back into the source (shown, overflows as before).
+  const closeRegion = () => {
+    if (pending.length) {
+      const targetId = lastSlotId ?? sourceId;
+      if (targetId) {
+        const w = work.get(targetId)!;
+        for (const p of pending) {
+          if (!w.catIds.includes(p.catId)) w.catIds.push(p.catId);
+          w.shown.add(p.item.id);
+        }
+      }
+    }
+    pending = [];
+    lastSlotId = null;
+    sourceId = null;
+  };
+
+  for (const z0 of zonesInReadingOrder(zones)) {
+    const z = byId.get(z0.id)!;
+    const innerH = innerHeight(z);
+    const isSource = !z0.autoFilled && z0.categoryIds.length > 0;
+
+    if (isSource) {
+      closeRegion();
+      sourceId = z0.id;
+      const cats = z0.categoryIds
+        .map((id) => catalog.get(id))
+        .filter((c): c is FlowCatalogCategory => !!c)
+        .map((c) => ({ id: c.id, name: c.name, items: c.items }));
+      const kept = fittingIds(cats, innerH, m);
+      work.set(z0.id, {
+        catIds: z0.categoryIds.slice(),
+        shown: kept,
+        autoFilled: false,
+      });
+      pending = [];
+      for (const c of cats)
+        for (const it of c.items)
+          if (!kept.has(it.id))
+            pending.push({ catId: c.id, name: c.name, item: it });
+      continue;
+    }
+
+    // Continuation slot. Empty when nothing is waiting.
+    if (pending.length === 0) {
+      work.set(z0.id, { catIds: [], shown: new Set(), autoFilled: false });
+      continue;
+    }
+    const kept = fittingIds(groupToCats(pending), innerH, m);
+    const taken: Pending[] = [];
+    while (pending.length && kept.has(pending[0]!.item.id))
+      taken.push(pending.shift()!);
+    const catIds: string[] = [];
+    const shown = new Set<string>();
+    for (const t of taken) {
+      if (!catIds.includes(t.catId)) catIds.push(t.catId);
+      shown.add(t.item.id);
+    }
+    work.set(z0.id, { catIds, shown, autoFilled: taken.length > 0 });
+    if (taken.length) lastSlotId = z0.id;
+  }
+  closeRegion();
+
+  // Derive categoryIds + hiddenItemIds (opt-out within shown categories) from
+  // the working state. Non-menu zones are returned untouched.
+  for (const z of out) {
+    if (z.type !== "menu") continue;
+    const w = work.get(z.id) ?? { catIds: [], shown: new Set(), autoFilled: false };
+    const hidden: string[] = [];
+    for (const catId of w.catIds) {
+      const cat = catalog.get(catId);
+      if (!cat) continue;
+      for (const it of cat.items) if (!w.shown.has(it.id)) hidden.push(it.id);
+    }
+    z.categoryIds = w.catIds;
+    z.hiddenItemIds = hidden;
+    z.autoFilled = w.autoFilled;
+  }
+  return out;
 }

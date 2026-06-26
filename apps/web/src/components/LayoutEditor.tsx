@@ -13,6 +13,7 @@ const previewFont = Roboto({
   display: "swap",
 });
 import {
+  flowCategoriesAcrossZones,
   LAYOUT_TEMPLATES,
   MENU_BLOCK_PAD,
   MENU_SCALE_DEFAULT,
@@ -24,6 +25,7 @@ import {
   resolveFontScale,
   type Category,
   type Device,
+  type FlowCatalogCategory,
   type Item,
   type LayoutZone,
   type MenuFont,
@@ -97,6 +99,9 @@ export function LayoutEditorPanel({
     }
   };
   const [sliding, setSliding] = useState(device.layout?.sliding ?? true);
+  // When on, a category that overflows its block spills into the following
+  // empty/continuation blocks automatically (see flowCategoriesAcrossZones).
+  const [autoFlow, setAutoFlow] = useState(device.layout?.autoFlow ?? true);
   // Which menu blocks overflow at the current size — only meaningful with
   // sliding off, where every item must fit. Keyed by zone id.
   const [overflowByZone, setOverflowByZone] = useState<Record<string, boolean>>({});
@@ -143,6 +148,11 @@ export function LayoutEditorPanel({
     ? Math.min(device.resolution.width, device.resolution.height)
     : 1080;
   const logicalW = (orientation === "portrait" ? shortSide : longSide) / pixelRatio;
+  // Canvas height in dp for the intended orientation — feeds the auto-flow
+  // distributor's per-block capacity (innerH = h% × this − padding), the same
+  // basis the TV paginates against.
+  const logicalHeightDp =
+    (orientation === "portrait" ? longSide : shortSide) / pixelRatio;
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const [canvasPx, setCanvasPx] = useState(0);
@@ -179,6 +189,37 @@ export function LayoutEditorPanel({
     return m;
   }, [items]);
 
+  // Available items per category, shaped for the auto-flow distributor.
+  const catalog = useMemo(() => {
+    const m = new Map<string, FlowCatalogCategory>();
+    for (const c of categories) {
+      if (!c.isAvailable) continue;
+      m.set(c.id, {
+        id: c.id,
+        name: c.name,
+        items: (itemsByCat.get(c.id) ?? []).map((it) => ({
+          id: it.id,
+          name: it.name,
+          price: Number(it.price),
+        })),
+      });
+    }
+    return m;
+  }, [categories, itemsByCat]);
+
+  // The zones actually previewed and saved. With auto-flow on, each block's
+  // overflow spills into the following empty/continuation blocks; off, the
+  // operator's manual assignment is used verbatim. Guard on a loaded catalog so
+  // we never clobber stored content with an empty split during initial load.
+  const flowedZones = useMemo(() => {
+    if (!autoFlow || catalog.size === 0) return zones;
+    return flowCategoriesAcrossZones(zones, {
+      logicalHeightDp,
+      fontSize: fontScale,
+      catalog,
+    });
+  }, [autoFlow, zones, catalog, logicalHeightDp, fontScale]);
+
   function applyTemplate(id: string) {
     const t = LAYOUT_TEMPLATES.find((x) => x.id === id);
     if (!t) return;
@@ -188,6 +229,7 @@ export function LayoutEditorPanel({
       categoryIds: [],
       hiddenItemIds: [],
       mediaUrl: null,
+      autoFilled: false,
     }));
     setTemplateId(id);
     setZones(next);
@@ -288,9 +330,12 @@ export function LayoutEditorPanel({
     try {
       await api.updateDeviceLayout(device.id, {
         template: templateId,
-        zones,
+        // Persist the flowed result (with autoFilled markers) so the TV renders
+        // the same split the preview shows; it re-derives identically on reload.
+        zones: flowedZones,
         fontSize: fontScale,
         sliding,
+        autoFlow,
       });
       setSaved(true);
       onSaved?.();
@@ -299,13 +344,18 @@ export function LayoutEditorPanel({
     }
   }
 
+  // Manual edits target the raw zone; the flowed copy tells us whether this
+  // block is an auto-filled continuation slot (then its content is read-only).
   const sel = zones.find((z) => z.id === selected) ?? null;
+  const selFlowed = flowedZones.find((z) => z.id === selected) ?? null;
+  const selAutoFilled = autoFlow && !!selFlowed?.autoFilled;
 
   // With sliding off, a layout can only be saved when every menu block's items
-  // fit statically. A block reports overflow via reportOverflow.
+  // fit statically. A block reports overflow via reportOverflow, keyed by the
+  // (flowed) zone id actually rendered in the preview.
   const blocksDontFit =
     !sliding &&
-    zones.some(
+    flowedZones.some(
       (z) => z.type === "menu" && z.categoryIds.length > 0 && overflowByZone[z.id],
     );
 
@@ -424,6 +474,27 @@ export function LayoutEditorPanel({
         </div>
       )}
 
+      {zones.some((z) => z.type === "menu") && (
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-3">
+            <Label htmlFor="autoflow">Auto-fill overflow</Label>
+            <Switch
+              id="autoflow"
+              checked={autoFlow}
+              onCheckedChange={(v) => {
+                setAutoFlow(v);
+                setSaved(false);
+              }}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {autoFlow
+              ? "On — a category that doesn’t fit its block spills into the following empty blocks automatically (in reading order). Just pick a category for the first block."
+              : "Off — each block shows only the items you assign to it."}
+          </p>
+        </div>
+      )}
+
       {zones.length > 0 && (
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Preview */}
@@ -434,7 +505,7 @@ export function LayoutEditorPanel({
               className={`relative mt-2 w-full max-w-xl overflow-hidden rounded-lg border border-border bg-background ${previewFont.className}`}
               style={{ aspectRatio: String(aspect) }}
             >
-              {zones.map((z) => (
+              {flowedZones.map((z) => (
                 <button
                   key={z.id}
                   type="button"
@@ -509,7 +580,15 @@ export function LayoutEditorPanel({
                   </select>
                 </div>
 
-                {(sel.type === "menu" || sel.type === "featured") && (
+                {selAutoFilled && (
+                  <p className="rounded-md border border-border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
+                    Auto-filled — this block shows the overflow from an earlier
+                    block. Turn off “Auto-fill overflow”, or change the first
+                    block’s category, to edit what appears here.
+                  </p>
+                )}
+
+                {!selAutoFilled && (sel.type === "menu" || sel.type === "featured") && (
                   <ul className="max-h-64 space-y-1 overflow-y-auto">
                     {categories.length === 0 && (
                       <li className="text-sm text-muted-foreground">No categories yet.</li>
@@ -536,14 +615,22 @@ export function LayoutEditorPanel({
                             )}
                           </label>
                           {/* Once a category is on, pick which of its items show
-                              in THIS block (independent of other blocks). */}
-                          {sel.type === "menu" && enabled && (
+                              in THIS block (independent of other blocks). With
+                              auto-flow on the split is computed, so the per-item
+                              picker is replaced by a short hint. */}
+                          {sel.type === "menu" && enabled && !autoFlow && (
                             <CategoryItemPicker
                               items={itemsByCat.get(c.id) ?? []}
                               hiddenIds={new Set(sel.hiddenItemIds ?? [])}
                               lockedIds={shownInOtherBlocks(c.id, sel.id)}
                               onToggle={(itemId) => toggleItem(sel.id, itemId)}
                             />
+                          )}
+                          {sel.type === "menu" && enabled && autoFlow && (
+                            <p className="ml-6 mt-1 text-xs italic text-muted-foreground opacity-70">
+                              Items auto-distributed across this and the following
+                              empty blocks.
+                            </p>
                           )}
                         </li>
                       );
