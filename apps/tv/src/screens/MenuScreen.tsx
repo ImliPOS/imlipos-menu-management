@@ -16,7 +16,12 @@ import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import * as ScreenOrientation from "expo-screen-orientation";
 import * as Updates from "expo-updates";
-import { MENU_BLOCK_PAD, menuStyle, paginateMenu } from "@imlipos/contracts";
+import {
+  continuationHeadingIds,
+  MENU_BLOCK_PAD,
+  menuStyle,
+  paginateMenu,
+} from "@imlipos/contracts";
 import type {
   DeviceContent,
   MenuCategoryView,
@@ -221,6 +226,20 @@ export function MenuScreen({
       }
     : { flex: 1, position: "relative" };
 
+  // A category that spills across blocks should print its heading only in the
+  // first block it appears in; continuation blocks render the items headingless.
+  const hideHeadings = continuationHeadingIds(
+    content.zones.map((z) => ({
+      id: z.id,
+      x: z.x,
+      y: z.y,
+      type: z.type,
+      shownCategoryIds: (z.categories ?? [])
+        .filter((c) => c.isAvailable && c.items.some((i) => i.isAvailable))
+        .map((c) => c.id),
+    })),
+  );
+
   return (
     <Pressable onLongPress={confirmReset} delayLongPress={2000} style={styles.root}>
       {!online && (
@@ -247,6 +266,7 @@ export function MenuScreen({
               zone={z}
               fontSize={content.fontSize ?? "medium"}
               sliding={content.sliding ?? true}
+              hideHeadings={hideHeadings.get(z.id)}
             />
           </View>
         ))}
@@ -259,10 +279,13 @@ function Zone({
   zone,
   fontSize,
   sliding,
+  hideHeadings,
 }: {
   zone: ResolvedZone;
   fontSize: MenuFont;
   sliding: boolean;
+  /** Category ids whose heading is suppressed here (continuation block). */
+  hideHeadings?: Set<string>;
 }) {
   if (zone.type === "image") {
     return zone.mediaUrl ? (
@@ -313,7 +336,14 @@ function Zone({
   const cats = (zone.categories ?? []).filter(
     (c) => c.isAvailable && c.items.some((i) => i.isAvailable),
   );
-  return <PagedMenu cats={cats} fontSize={fontSize} sliding={sliding} />;
+  return (
+    <PagedMenu
+      cats={cats}
+      fontSize={fontSize}
+      sliding={sliding}
+      hideHeadings={hideHeadings}
+    />
+  );
 }
 
 // Two menu blocks sitting edge-to-edge read as one continuous menu. Draw a
@@ -369,10 +399,12 @@ function PagedMenu({
   cats,
   fontSize,
   sliding,
+  hideHeadings,
 }: {
   cats: MenuCategoryView[];
   fontSize: MenuFont;
   sliding: boolean;
+  hideHeadings?: Set<string>;
 }) {
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [frame, setFrame] = useState(0);
@@ -446,17 +478,24 @@ function PagedMenu({
       {/* Sliding off: render every category statically (the editor guarantees
           they fit before saving). Sliding on: pinned categories + cycling tail. */}
       {(sliding ? fixed : simple).map((pc) => (
-        <MenuCategoryRows key={pc.id} pc={pc} ms={ms} />
+        <MenuCategoryRows
+          key={pc.id}
+          pc={pc}
+          ms={ms}
+          hideTitle={hideHeadings?.has(pc.id) ?? false}
+        />
       ))}
       {/* Overflowing category — heading static; only the item rows cycle. */}
       {current && (
         <View style={styles.cyclingCategory}>
-          <Text
-            style={[styles.catTitle, catTitleSize(ms)]}
-            numberOfLines={1}
-          >
-            {current.name}
-          </Text>
+          {!hideHeadings?.has(current.catId) && (
+            <Text
+              style={[styles.catTitle, catTitleSize(ms)]}
+              numberOfLines={1}
+            >
+              {current.name}
+            </Text>
+          )}
           <View style={styles.pagedViewport}>
             <Animated.View style={{ transform: [{ translateX: x }] }}>
               <MenuItemRows items={current.items} ms={ms} />
@@ -468,12 +507,23 @@ function PagedMenu({
   );
 }
 
-function MenuCategoryRows({ pc, ms }: { pc: MenuPageCategory; ms: MenuStyle }) {
+function MenuCategoryRows({
+  pc,
+  ms,
+  hideTitle = false,
+}: {
+  pc: MenuPageCategory;
+  ms: MenuStyle;
+  /** Suppress the heading — this category continues from an earlier block. */
+  hideTitle?: boolean;
+}) {
   return (
     <View style={{ marginBottom: ms.catGap }}>
-      <Text style={[styles.catTitle, catTitleSize(ms)]} numberOfLines={1}>
-        {pc.name}
-      </Text>
+      {!hideTitle && (
+        <Text style={[styles.catTitle, catTitleSize(ms)]} numberOfLines={1}>
+          {pc.name}
+        </Text>
+      )}
       <MenuItemRows items={pc.items} ms={ms} />
     </View>
   );

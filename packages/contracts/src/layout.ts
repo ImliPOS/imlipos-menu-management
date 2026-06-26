@@ -619,12 +619,48 @@ export interface FlowOptions {
 
 /** Menu zones sorted in reading order: top-to-bottom, then left-to-right.
  *  Non-menu zones are excluded (they don't take part in the flow). */
-export function zonesInReadingOrder(zones: LayoutZone[]): LayoutZone[] {
+export function zonesInReadingOrder<
+  T extends { x: number; y: number; type: ZoneType },
+>(zones: T[]): T[] {
   const EPS = 0.5; // percentage tolerance for "same row"
   return zones
     .filter((z) => z.type === "menu")
     .slice()
     .sort((a, b) => (Math.abs(a.y - b.y) <= EPS ? a.x - b.x : a.y - b.y));
+}
+
+/** ---- Continuation headings ----
+ *  When a category spills across blocks (auto-flow, or a manual split), only the
+ *  FIRST block it appears in should print its heading; the later blocks are an
+ *  obvious continuation, so their repeated heading is just noise.
+ *
+ *  Given the menu zones and the category ids that actually render in each (in
+ *  display order), returns — per zone — the category ids whose heading should be
+ *  suppressed because the category already appeared, with shown items, in an
+ *  earlier zone (reading order). Shared by the TV and the editor preview so both
+ *  hide exactly the same headings. */
+export interface HeadingZone {
+  id: string;
+  x: number;
+  y: number;
+  type: ZoneType;
+  /** Category ids that render ≥1 item in this zone, in display order. */
+  shownCategoryIds: string[];
+}
+export function continuationHeadingIds(
+  zones: HeadingZone[],
+): Map<string, Set<string>> {
+  const seen = new Set<string>();
+  const out = new Map<string, Set<string>>();
+  for (const z of zonesInReadingOrder(zones)) {
+    const hide = new Set<string>();
+    for (const cid of z.shownCategoryIds) {
+      if (seen.has(cid)) hide.add(cid);
+      else seen.add(cid);
+    }
+    out.set(z.id, hide);
+  }
+  return out;
 }
 
 /** Build paginate-ready categories from a run of pending items, grouping

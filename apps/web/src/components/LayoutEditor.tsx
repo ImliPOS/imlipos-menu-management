@@ -13,6 +13,7 @@ const previewFont = Roboto({
   display: "swap",
 });
 import {
+  continuationHeadingIds,
   flowCategoriesAcrossZones,
   LAYOUT_TEMPLATES,
   MENU_BLOCK_PAD,
@@ -219,6 +220,29 @@ export function LayoutEditorPanel({
       catalog,
     });
   }, [autoFlow, zones, catalog, logicalHeightDp, fontScale]);
+
+  // Category ids whose heading is suppressed per block — a category that spills
+  // across blocks prints its heading only in the first block it appears in.
+  const headingHideByZone = useMemo(
+    () =>
+      continuationHeadingIds(
+        flowedZones.map((z) => {
+          const hidden = new Set(z.hiddenItemIds ?? []);
+          const shownCategoryIds =
+            z.type === "menu"
+              ? z.categoryIds.filter((cid) => {
+                  const c = catById.get(cid);
+                  if (!c || !c.isAvailable) return false;
+                  return (itemsByCat.get(cid) ?? []).some(
+                    (it) => !hidden.has(it.id),
+                  );
+                })
+              : [];
+          return { id: z.id, x: z.x, y: z.y, type: z.type, shownCategoryIds };
+        }),
+      ),
+    [flowedZones, catById, itemsByCat],
+  );
 
   function applyTemplate(id: string) {
     const t = LAYOUT_TEMPLATES.find((x) => x.id === id);
@@ -529,6 +553,7 @@ export function LayoutEditorPanel({
                       catById={catById}
                       itemsByCat={itemsByCat}
                       onOverflow={reportOverflow}
+                      hideHeadings={headingHideByZone.get(z.id)}
                     />
                   ) : (
                     <span className="flex h-full w-full items-center justify-center text-xs font-medium">
@@ -801,6 +826,7 @@ function MenuBlock({
   catById,
   itemsByCat,
   onOverflow,
+  hideHeadings,
 }: {
   zone: LayoutZone;
   scale: number;
@@ -809,6 +835,8 @@ function MenuBlock({
   catById: Map<string, Category>;
   itemsByCat: Map<string, Item[]>;
   onOverflow: (zoneId: string, overflows: boolean) => void;
+  /** Category ids whose heading is suppressed here (continuation block). */
+  hideHeadings?: Set<string>;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [blockPx, setBlockPx] = useState(0);
@@ -914,6 +942,7 @@ function MenuBlock({
                 scale={scale}
                 ms={ms}
                 last={i === simple.length - 1}
+                hideTitle={hideHeadings?.has(pc.id) ?? false}
               />
             ))}
           </div>
@@ -921,12 +950,20 @@ function MenuBlock({
           /* Sliding on: pinned categories + the cycling tail. */
           <>
             {fixed.map((pc) => (
-              <PreviewCategory key={pc.id} pc={pc} scale={scale} ms={ms} />
+              <PreviewCategory
+                key={pc.id}
+                pc={pc}
+                scale={scale}
+                ms={ms}
+                hideTitle={hideHeadings?.has(pc.id) ?? false}
+              />
             ))}
             {/* Overflowing category — heading static; only the item rows cycle. */}
             {current && (
               <div className="flex min-h-0 flex-1 flex-col">
-                <PreviewCategoryTitle name={current.name} scale={scale} ms={ms} />
+                {!hideHeadings?.has(current.catId) && (
+                  <PreviewCategoryTitle name={current.name} scale={scale} ms={ms} />
+                )}
                 <div className="min-h-0 flex-1 overflow-hidden">
                   <div
                     key={frame}
@@ -1030,6 +1067,7 @@ function PreviewCategory({
   scale,
   ms,
   last = false,
+  hideTitle = false,
 }: {
   pc: MenuPageCategory;
   scale: number;
@@ -1037,10 +1075,12 @@ function PreviewCategory({
   /** The last category needs no trailing gap — it would only be dead space
    *  below the final row (and would push a block over the fit check). */
   last?: boolean;
+  /** Suppress the heading — this category continues from an earlier block. */
+  hideTitle?: boolean;
 }) {
   return (
     <div style={{ marginBottom: last ? 0 : ms.catGap * scale }}>
-      <PreviewCategoryTitle name={pc.name} scale={scale} ms={ms} />
+      {!hideTitle && <PreviewCategoryTitle name={pc.name} scale={scale} ms={ms} />}
       {pc.items.map((it) => (
         <PreviewItemRow key={it.id} it={it} scale={scale} ms={ms} />
       ))}
