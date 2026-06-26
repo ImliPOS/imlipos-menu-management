@@ -701,11 +701,12 @@ function fittingIds(
  * spills into the following empty / continuation blocks (reading order). Pure
  * and idempotent: re-running on its own output yields the same zones.
  *
- *  - A *source* block (autoFilled === false, has categoryIds) keeps the items
- *    that fit; the rest become its overflow.
- *  - The blocks after it that are empty or previously auto-filled become
- *    *continuation slots* that drain the overflow until full.
- *  - A block with its own category ends the upstream flow.
+ *  - A *source* block (autoFilled === false, introduces a not-yet-seen category)
+ *    keeps the items that fit; the rest become its overflow.
+ *  - The blocks after it that are empty, previously auto-filled, or merely
+ *    repeat an already-flowing category become *continuation slots* that drain
+ *    the overflow until full.
+ *  - A block that introduces a *new* category ends the upstream flow.
  *  - Overflow left after the last slot stays in that slot (cycles / "doesn't
  *    fit" as today); if there was no slot at all, it stays in the source.
  */
@@ -728,6 +729,12 @@ export function flowCategoriesAcrossZones(
   let pending: Pending[] = [];
   let lastSlotId: string | null = null; // last continuation slot in the open region
   let sourceId: string | null = null; // source that opened the region
+  // Categories already introduced by an earlier block. A block that only
+  // repeats one of these (e.g. the same category left on a downstream block
+  // from a manual split, or a re-applied template) is a continuation slot, not
+  // a new source — otherwise it would wrongly end the flow and the overflow
+  // would have nowhere to go.
+  const seenCats = new Set<string>();
 
   // Re-show leftover overflow: into the last slot if one exists (it overflows
   // there), otherwise back into the source (shown, overflows as before).
@@ -750,11 +757,18 @@ export function flowCategoriesAcrossZones(
   for (const z0 of zonesInReadingOrder(zones)) {
     const z = byId.get(z0.id)!;
     const innerH = innerHeight(z);
-    const isSource = !z0.autoFilled && z0.categoryIds.length > 0;
+    // A block opens a new region only when it introduces a category not already
+    // flowing. A block that just repeats already-seen categories is absorbed as
+    // a continuation slot below.
+    const isSource =
+      !z0.autoFilled &&
+      z0.categoryIds.length > 0 &&
+      z0.categoryIds.some((c) => !seenCats.has(c));
 
     if (isSource) {
       closeRegion();
       sourceId = z0.id;
+      for (const c of z0.categoryIds) seenCats.add(c);
       const cats = z0.categoryIds
         .map((id) => catalog.get(id))
         .filter((c): c is FlowCatalogCategory => !!c)

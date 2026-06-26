@@ -24,6 +24,7 @@ import {
   menuStyle,
   paginateMenu,
   resolveFontScale,
+  zonesInReadingOrder,
   type Category,
   type Device,
   type FlowCatalogCategory,
@@ -374,13 +375,29 @@ export function LayoutEditorPanel({
   const selFlowed = flowedZones.find((z) => z.id === selected) ?? null;
   const selAutoFilled = autoFlow && !!selFlowed?.autoFilled;
 
+  // With auto-flow on, overflow spills forward, so only the LAST menu block (in
+  // reading order) can legitimately fail to fit — everything earlier just flows
+  // onward. With auto-flow off, any block can overflow.
+  const lastFlowZoneId = useMemo(() => {
+    const menus = zonesInReadingOrder(flowedZones);
+    return menus.length ? menus[menus.length - 1]!.id : null;
+  }, [flowedZones]);
+  const canOverflowWarn = useCallback(
+    (zoneId: string) => !autoFlow || zoneId === lastFlowZoneId,
+    [autoFlow, lastFlowZoneId],
+  );
+
   // With sliding off, a layout can only be saved when every menu block's items
   // fit statically. A block reports overflow via reportOverflow, keyed by the
   // (flowed) zone id actually rendered in the preview.
   const blocksDontFit =
     !sliding &&
     flowedZones.some(
-      (z) => z.type === "menu" && z.categoryIds.length > 0 && overflowByZone[z.id],
+      (z) =>
+        z.type === "menu" &&
+        z.categoryIds.length > 0 &&
+        overflowByZone[z.id] &&
+        canOverflowWarn(z.id),
     );
 
   // A category MAY appear in more than one menu/featured block (e.g. to split a
@@ -554,6 +571,7 @@ export function LayoutEditorPanel({
                       itemsByCat={itemsByCat}
                       onOverflow={reportOverflow}
                       hideHeadings={headingHideByZone.get(z.id)}
+                      warnOverflow={canOverflowWarn(z.id)}
                     />
                   ) : (
                     <span className="flex h-full w-full items-center justify-center text-xs font-medium">
@@ -827,6 +845,7 @@ function MenuBlock({
   itemsByCat,
   onOverflow,
   hideHeadings,
+  warnOverflow,
 }: {
   zone: LayoutZone;
   scale: number;
@@ -837,6 +856,9 @@ function MenuBlock({
   onOverflow: (zoneId: string, overflows: boolean) => void;
   /** Category ids whose heading is suppressed here (continuation block). */
   hideHeadings?: Set<string>;
+  /** Whether a "Does not fit" badge may show here. With auto-flow on, only the
+   *  last block warns — earlier blocks flow their overflow onward. */
+  warnOverflow: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [blockPx, setBlockPx] = useState(0);
@@ -987,7 +1009,7 @@ function MenuBlock({
           ↻ {frame + 1}/{frameCount}
         </span>
       )}
-      {!sliding && overflows && (
+      {!sliding && overflows && warnOverflow && (
         <span className="pointer-events-none absolute bottom-1 right-1 rounded bg-red-600/90 px-1.5 py-0.5 text-[10px] font-medium text-white">
           Does not fit
         </span>
