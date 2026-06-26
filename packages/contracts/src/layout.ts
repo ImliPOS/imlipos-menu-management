@@ -283,6 +283,22 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
       { x: 50, y: 75, w: 50, h: 25, type: "menu" },
     ],
   },
+  {
+    // One image fills the top-left quadrant; below it sit two narrow menu
+    // columns, matching the four 25%-wide menu columns that fill the right half.
+    id: "img1-menu6-cols",
+    label: "1 image + 6 menu columns",
+    orientation: "landscape",
+    zones: [
+      { x: 0, y: 0, w: 50, h: 50, type: "image" },
+      { x: 0, y: 50, w: 25, h: 50, type: "menu" },
+      { x: 25, y: 50, w: 25, h: 50, type: "menu" },
+      { x: 50, y: 0, w: 25, h: 50, type: "menu" },
+      { x: 75, y: 0, w: 25, h: 50, type: "menu" },
+      { x: 50, y: 50, w: 25, h: 50, type: "menu" },
+      { x: 75, y: 50, w: 25, h: 50, type: "menu" },
+    ],
+  },
   // Portrait
   {
     id: "full-menu-p",
