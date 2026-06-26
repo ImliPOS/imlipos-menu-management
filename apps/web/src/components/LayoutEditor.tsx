@@ -200,23 +200,64 @@ export function LayoutEditorPanel({
     return m;
   }, [items]);
 
-  // Available items per category, shaped for the auto-flow distributor.
+  // Measure rendered text widths (dp) in the same Roboto the preview and TV use,
+  // so the fit math can tell whether an item name wraps to a 2nd line. Gated on
+  // the web font being ready — before that, widths are omitted and items are
+  // treated as single-line (the original behaviour) until a recompute.
+  const [fontsReady, setFontsReady] = useState(false);
+  useEffect(() => {
+    if (typeof document === "undefined" || !("fonts" in document)) {
+      setFontsReady(true);
+      return;
+    }
+    let on = true;
+    document.fonts.ready.then(() => on && setFontsReady(true));
+    return () => {
+      on = false;
+    };
+  }, []);
+  const measureCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+  const measureText = useCallback(
+    (text: string, fontPx: number, weight: number) => {
+      if (!measureCtxRef.current && typeof document !== "undefined") {
+        measureCtxRef.current = document.createElement("canvas").getContext("2d");
+      }
+      const ctx = measureCtxRef.current;
+      if (!ctx) return 0;
+      // Font px == dp here, so widths come out in dp (same space as block widths).
+      ctx.font = `${weight} ${fontPx}px ${previewFont.style.fontFamily}`;
+      return ctx.measureText(text).width;
+    },
+    [],
+  );
+
+  // Available items per category, shaped for the auto-flow distributor, each with
+  // its measured name/price widths so the distributor can reserve a 2nd line for
+  // names that won't fit on one.
   const catalog = useMemo(() => {
+    const ms = menuStyle(fontScale);
     const m = new Map<string, FlowCatalogCategory>();
     for (const c of categories) {
       if (!c.isAvailable) continue;
       m.set(c.id, {
         id: c.id,
         name: c.name,
-        items: (itemsByCat.get(c.id) ?? []).map((it) => ({
-          id: it.id,
-          name: it.name,
-          price: Number(it.price),
-        })),
+        items: (itemsByCat.get(c.id) ?? []).map((it) => {
+          const price = Number(it.price);
+          return {
+            id: it.id,
+            name: it.name,
+            price,
+            nameWidth: fontsReady ? measureText(it.name, ms.itemFont, 400) : undefined,
+            priceWidth: fontsReady
+              ? measureText(`₹${price}`, ms.itemFont, 700)
+              : undefined,
+          };
+        }),
       });
     }
     return m;
-  }, [categories, itemsByCat]);
+  }, [categories, itemsByCat, fontScale, fontsReady, measureText]);
 
   // The zones actually previewed and saved. With auto-flow on, each block's
   // overflow spills into the following empty/continuation blocks; off, the
@@ -226,10 +267,11 @@ export function LayoutEditorPanel({
     if (!autoFlow || catalog.size === 0) return zones;
     return flowCategoriesAcrossZones(zones, {
       logicalHeightDp,
+      logicalWidthDp: logicalW,
       fontSize: fontScale,
       catalog,
     });
-  }, [autoFlow, zones, catalog, logicalHeightDp, fontScale]);
+  }, [autoFlow, zones, catalog, logicalHeightDp, logicalW, fontScale]);
 
   // Category ids whose heading is suppressed per block — a category that spills
   // across blocks prints its heading only in the first block it appears in.
@@ -976,6 +1018,7 @@ function MenuBlock({
                 ms={ms}
                 last={i === simple.length - 1}
                 hideTitle={hideHeadings?.has(pc.id) ?? false}
+                wrap
               />
             ))}
           </div>
@@ -1059,24 +1102,40 @@ function PreviewItemRow({
   it,
   scale,
   ms,
+  wrap = false,
 }: {
   it: MenuPageItem;
   scale: number;
   ms: MenuStyle;
+  /** Allow the name to wrap to a 2nd line (then ellipsise) instead of clipping
+   *  to one — matches the TV in sliding-off mode. */
+  wrap?: boolean;
 }) {
   return (
     <div
-      className="flex items-center justify-between"
+      className={`flex justify-between ${wrap ? "items-start" : "items-center"}`}
       style={{ padding: `${ms.itemPadV * scale}px 0`, gap: 8 * scale }}
     >
-      {/* Single-line + ellipsis so a long name doesn't wrap — keeping each
-          row at the font preset's itemH, exactly like the TV. */}
+      {/* Wrap up to 2 lines (then ellipsise) when wrapping is on; otherwise stay
+          single-line + ellipsis. The fit math reserves the matching height. */}
       <span
-        className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+        className={
+          wrap
+            ? "min-w-0 overflow-hidden"
+            : "min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+        }
         style={{
           color: "#fff",
           fontSize: ms.itemFont * scale,
           lineHeight: `${ms.itemLine * scale}px`,
+          ...(wrap
+            ? {
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical" as const,
+                overflowWrap: "anywhere" as const,
+              }
+            : {}),
         }}
       >
         {it.name}
@@ -1102,6 +1161,7 @@ function PreviewCategory({
   ms,
   last = false,
   hideTitle = false,
+  wrap = false,
 }: {
   pc: MenuPageCategory;
   scale: number;
@@ -1111,12 +1171,14 @@ function PreviewCategory({
   last?: boolean;
   /** Suppress the heading — this category continues from an earlier block. */
   hideTitle?: boolean;
+  /** Allow item names to wrap to a 2nd line. */
+  wrap?: boolean;
 }) {
   return (
     <div style={{ marginBottom: last ? 0 : ms.catGap * scale }}>
       {!hideTitle && <PreviewCategoryTitle name={pc.name} scale={scale} ms={ms} />}
       {pc.items.map((it) => (
-        <PreviewItemRow key={it.id} it={it} scale={scale} ms={ms} />
+        <PreviewItemRow key={it.id} it={it} scale={scale} ms={ms} wrap={wrap} />
       ))}
     </div>
   );

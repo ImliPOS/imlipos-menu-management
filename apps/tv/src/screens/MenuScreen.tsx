@@ -490,6 +490,7 @@ function PagedMenu({
           pc={pc}
           ms={ms}
           hideTitle={hideHeadings?.has(pc.id) ?? false}
+          wrap={!sliding}
         />
       ))}
       {/* Overflowing category — heading static; only the item rows cycle. */}
@@ -519,11 +520,14 @@ function MenuCategoryRows({
   pc,
   ms,
   hideTitle = false,
+  wrap = false,
 }: {
   pc: MenuPageCategory;
   ms: MenuStyle;
   /** Suppress the heading — this category continues from an earlier block. */
   hideTitle?: boolean;
+  /** Let item names wrap to a 2nd line. */
+  wrap?: boolean;
 }) {
   return (
     <View style={{ marginBottom: ms.catGap }}>
@@ -536,22 +540,30 @@ function MenuCategoryRows({
           {pc.name}
         </Text>
       )}
-      <MenuItemRows items={pc.items} ms={ms} />
+      <MenuItemRows items={pc.items} ms={ms} wrap={wrap} />
     </View>
   );
 }
 
-function MenuItemRows({ items, ms }: { items: MenuPageItem[]; ms: MenuStyle }) {
+function MenuItemRows({
+  items,
+  ms,
+  wrap = false,
+}: {
+  items: MenuPageItem[];
+  ms: MenuStyle;
+  /** Let the name wrap to a 2nd line (then ellipsise). Only in sliding-off mode,
+   *  where the editor reserved the matching height per item; sliding-on keeps a
+   *  single line so the metric-based cycling pagination stays exact. */
+  wrap?: boolean;
+}) {
   return (
     <>
       {items.map((it) => (
         <View key={it.id} style={[styles.row, { paddingVertical: ms.itemPadV }]}>
-          {/* Single-line, ellipsised — a wrapped name would make the row taller
-              than the font preset's itemH and the metric-based pagination would
-              then overflow the zone, clipping the bottom rows on the real panel. */}
           <Text
             style={[styles.item, itemSize(ms)]}
-            numberOfLines={1}
+            numberOfLines={wrap ? 2 : 1}
             allowFontScaling={false}
           >
             {it.name}
@@ -606,7 +618,8 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    // Top-align so the price sits beside the first line of a wrapped name.
+    alignItems: "flex-start",
     gap: 8,
   },
   // flexShrink lets a long name ellipsise instead of pushing the price off-row.

@@ -397,6 +397,12 @@ export interface MenuPageItem {
   id: string;
   name: string;
   price: number;
+  /** Rendered width (dp) of the name and the price text, measured in the editor
+   *  (Roboto, at the item font size). When present, the fit math can tell whether
+   *  a name wraps to a 2nd line in a given block width; when absent it assumes a
+   *  single line (the original behaviour). */
+  nameWidth?: number;
+  priceWidth?: number;
 }
 export interface MenuPageCategory {
   id: string;
@@ -515,6 +521,27 @@ export function menuStyle(size: MenuFont = MENU_SCALE_DEFAULT): MenuStyle {
 /** Default (medium) metrics — kept for paginateMenu's default argument. */
 export const MENU_METRICS = menuStyle("medium");
 
+/** Horizontal gap (dp) between an item's name and its price (styles.row gap). */
+export const MENU_ITEM_GAP = 8;
+
+/** How many lines an item row takes in a block whose inner width is `innerW` dp.
+ *  An item wraps to a 2nd line when its measured name can't sit on one line
+ *  beside the price. Capped at 2 (longer names ellipsise on line 2). Falls back
+ *  to 1 line when widths weren't measured, preserving the original behaviour. */
+export function itemLines(
+  item: { nameWidth?: number; priceWidth?: number },
+  innerW: number,
+): 1 | 2 {
+  if (!item.nameWidth || innerW <= 0) return 1;
+  const nameCol = innerW - (item.priceWidth ?? 0) - MENU_ITEM_GAP;
+  return item.nameWidth > nameCol ? 2 : 1;
+}
+
+/** Total height (dp) of an item row spanning `lines` lines. */
+export function itemHeight(lines: number, m: { itemLine: number; itemPadV: number }): number {
+  return lines * m.itemLine + m.itemPadV * 2;
+}
+
 /** Lay out a menu block into a static prefix + a cycling tail.
  *
  *  Leading categories that fully fit (stacked together) are *pinned*: they stay
@@ -611,6 +638,9 @@ export interface FlowOptions {
   /** The display's logical canvas height in dp (px / pixelRatio) for the
    *  intended orientation. Each zone's content height is (h% × this) − padding. */
   logicalHeightDp: number;
+  /** The display's logical canvas width in dp. Each zone's content width is
+   *  (w% × this) − padding; with measured item widths it decides name wrapping. */
+  logicalWidthDp: number;
   /** Per-display menu font scale (drives the same metrics as the TV). */
   fontSize?: MenuFont;
   /** Available items per category id, in display order. */
@@ -680,15 +710,17 @@ function groupToCats(
   return cats;
 }
 
-/** The item ids that fit when `cats` are stacked statically in `innerH` dp —
- *  each category is a heading (titleH) + its rows (itemH each), with a catGap
- *  between categories — exactly how a block renders. Returns the contiguous
- *  prefix that fits (stops at the first row that would overflow), so callers can
- *  split the stream on it. (paginateMenu can't be reused here: its cycling tail
- *  re-measures the overflowing category against the *full* block height, which
- *  over-counts capacity when a block also holds a category above it.) */
+/** The item ids that fit when `cats` are stacked statically in an `innerW`×`innerH`
+ *  dp block — each category is a heading (titleH) + its rows, with a catGap between
+ *  categories — exactly how a block renders. A row is one or two lines tall
+ *  depending on whether its (measured) name wraps in `innerW` (see itemLines).
+ *  Returns the contiguous prefix that fits (stops at the first row that would
+ *  overflow), so callers can split the stream on it. (paginateMenu can't be reused
+ *  here: its cycling tail re-measures the overflowing category against the *full*
+ *  block height, over-counting capacity when a block also holds a category above.) */
 function fittingIds(
   cats: PaginateCategory[],
+  innerW: number,
   innerH: number,
   m: MenuStyle,
 ): Set<string> {
@@ -702,8 +734,9 @@ function fittingIds(
     used += need;
     first = false;
     for (const it of c.items) {
-      if (used + m.itemH > innerH) return kept; // next row would overflow
-      used += m.itemH;
+      const h = itemHeight(itemLines(it, innerW), m);
+      if (used + h > innerH) return kept; // next row would overflow
+      used += h;
       kept.add(it.id);
     }
   }
@@ -731,7 +764,7 @@ function fittingIds(
  */
 export function flowCategoriesAcrossZones(
   zones: LayoutZone[],
-  { logicalHeightDp, fontSize, catalog }: FlowOptions,
+  { logicalHeightDp, logicalWidthDp, fontSize, catalog }: FlowOptions,
 ): LayoutZone[] {
   const m = menuStyle(fontSize);
   const out = zones.map((z) => ({ ...z }));
@@ -743,6 +776,8 @@ export function flowCategoriesAcrossZones(
 
   const innerHeight = (z: LayoutZone) =>
     (z.h / 100) * logicalHeightDp - MENU_BLOCK_PAD * 2;
+  const innerWidth = (z: LayoutZone) =>
+    (z.w / 100) * logicalWidthDp - MENU_BLOCK_PAD * 2;
 
   type Pending = { catId: string; name: string; item: MenuPageItem };
   const pending: Pending[] = [];
@@ -752,6 +787,7 @@ export function flowCategoriesAcrossZones(
   for (const z0 of zonesInReadingOrder(zones)) {
     const z = byId.get(z0.id)!;
     const innerH = innerHeight(z);
+    const innerW = innerWidth(z);
 
     // Inject this block's own NEW categories at the current stream position.
     // Repeats of an already-flowing category are ignored — they're just this
@@ -771,7 +807,7 @@ export function flowCategoriesAcrossZones(
     }
 
     // Fill this block from the front of the stream up to its capacity.
-    const kept = fittingIds(groupToCats(pending), innerH, m);
+    const kept = fittingIds(groupToCats(pending), innerW, innerH, m);
     const taken: Pending[] = [];
     while (pending.length && kept.has(pending[0]!.item.id))
       taken.push(pending.shift()!);
