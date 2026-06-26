@@ -284,15 +284,18 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
     ],
   },
   {
-    // One image fills the top-left quadrant; below it sit two narrow menu
-    // columns, matching the four 25%-wide menu columns that fill the right half.
-    id: "img1-menu6-cols",
+    // One image in the top-left quadrant; every other cell of the 4×2 grid is a
+    // narrow menu column. The half below the image is split into 2 menu blocks,
+    // and the right half holds the other 4 -> 6 uniform menu columns in all.
+    id: "img1-menu6",
     label: "1 image + 6 menu columns",
     orientation: "landscape",
     zones: [
       { x: 0, y: 0, w: 50, h: 50, type: "image" },
+      // Below the image: 2 menu blocks.
       { x: 0, y: 50, w: 25, h: 50, type: "menu" },
       { x: 25, y: 50, w: 25, h: 50, type: "menu" },
+      // Right half: 4 menu blocks (2 columns × 2 rows).
       { x: 50, y: 0, w: 25, h: 50, type: "menu" },
       { x: 75, y: 0, w: 25, h: 50, type: "menu" },
       { x: 50, y: 50, w: 25, h: 50, type: "menu" },
