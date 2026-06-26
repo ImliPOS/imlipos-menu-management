@@ -42,6 +42,13 @@ import { clearDeviceContent, loadDeviceContent, saveDeviceContent } from "../db/
 import { store } from "../lib/storage";
 import { sizedImage } from "../lib/image";
 
+// Bundled menu font (loaded in App.tsx). Pinning the family — rather than
+// relying on the device's default system font, which varies and can be wider —
+// keeps every panel pixel-faithful to the editor preview (Roboto there too).
+const FONT_REGULAR = "Roboto_400Regular";
+const FONT_BOLD = "Roboto_700Bold";
+const FONT_BLACK = "Roboto_900Black";
+
 /**
  * Renders the display's per-device zone layout. Each zone is positioned by
  * percentage (adapts to any resolution) and renders menu / featured / image /
@@ -492,6 +499,7 @@ function PagedMenu({
             <Text
               style={[styles.catTitle, catTitleSize(ms)]}
               numberOfLines={1}
+              allowFontScaling={false}
             >
               {current.name}
             </Text>
@@ -520,7 +528,11 @@ function MenuCategoryRows({
   return (
     <View style={{ marginBottom: ms.catGap }}>
       {!hideTitle && (
-        <Text style={[styles.catTitle, catTitleSize(ms)]} numberOfLines={1}>
+        <Text
+          style={[styles.catTitle, catTitleSize(ms)]}
+          numberOfLines={1}
+          allowFontScaling={false}
+        >
           {pc.name}
         </Text>
       )}
@@ -537,10 +549,18 @@ function MenuItemRows({ items, ms }: { items: MenuPageItem[]; ms: MenuStyle }) {
           {/* Single-line, ellipsised — a wrapped name would make the row taller
               than the font preset's itemH and the metric-based pagination would
               then overflow the zone, clipping the bottom rows on the real panel. */}
-          <Text style={[styles.item, itemSize(ms)]} numberOfLines={1}>
+          <Text
+            style={[styles.item, itemSize(ms)]}
+            numberOfLines={1}
+            allowFontScaling={false}
+          >
             {it.name}
           </Text>
-          <Text style={[styles.price, itemSize(ms)]} numberOfLines={1}>
+          <Text
+            style={[styles.price, itemSize(ms)]}
+            numberOfLines={1}
+            allowFontScaling={false}
+          >
             ₹{it.price}
           </Text>
         </View>
@@ -579,9 +599,10 @@ const styles = StyleSheet.create({
   cyclingCategory: { flex: 1 },
   // Clips the sliding item-page during the cycle transition.
   pagedViewport: { flex: 1, overflow: "hidden" },
-  // Colour/weight only — the font size, line height and gaps come from the
+  // Colour + bundled font weight (the family carries the weight on Android, so
+  // fontFamily replaces fontWeight). Size, line height and gaps come from the
   // active font preset (see catTitleSize / itemSize / the inline catGap).
-  catTitle: { color: "#f5d90a", fontWeight: "800" },
+  catTitle: { color: "#f5d90a", fontFamily: FONT_BLACK },
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -589,8 +610,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   // flexShrink lets a long name ellipsise instead of pushing the price off-row.
-  item: { flexShrink: 1, color: "#fff" },
-  price: { flexShrink: 0, color: "#fff", fontWeight: "700" },
+  item: { flexShrink: 1, color: "#fff", fontFamily: FONT_REGULAR },
+  price: { flexShrink: 0, color: "#fff", fontFamily: FONT_BOLD },
 
   featColumn: { flex: 1, gap: 16 },
   featCard: { flex: 1, minHeight: 0, borderRadius: 16, overflow: "hidden" },

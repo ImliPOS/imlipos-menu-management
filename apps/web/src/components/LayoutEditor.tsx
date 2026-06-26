@@ -1042,8 +1042,9 @@ function PreviewCategoryTitle({
     <div
       className="overflow-hidden text-ellipsis whitespace-nowrap"
       style={{
+        // 900 to match the TV's bundled Roboto_900Black category heading.
         color: "#f5d90a",
-        fontWeight: 800,
+        fontWeight: 900,
         fontSize: ms.titleFont * scale,
         lineHeight: `${ms.titleLine * scale}px`,
         marginBottom: ms.titleGap * scale,
