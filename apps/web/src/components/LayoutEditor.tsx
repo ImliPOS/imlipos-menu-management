@@ -22,6 +22,7 @@ import {
   MENU_SCALE_MIN,
   MENU_SCALE_STEP,
   menuStyle,
+  ownCategoriesPerZone,
   paginateMenu,
   resolveFontScale,
   zonesInReadingOrder,
@@ -66,7 +67,15 @@ export function LayoutEditorPanel({
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [templateId, setTemplateId] = useState(device.layout?.template ?? "");
-  const [zones, setZones] = useState<LayoutZone[]>(device.layout?.zones ?? []);
+  const initialAutoFlow = device.layout?.autoFlow ?? true;
+  // With auto-flow on, a saved layout stores the fully-distributed zones. Reduce
+  // them back to sparse operator intent (each block's own picks) so the category
+  // checkboxes reflect what was assigned where — the distributor re-expands the
+  // overflow for the preview/save.
+  const [zones, setZones] = useState<LayoutZone[]>(() => {
+    const z = device.layout?.zones ?? [];
+    return initialAutoFlow ? ownCategoriesPerZone(z) : z;
+  });
   // Continuous font scale (1 = original). Legacy preset strings on existing
   // layouts are normalised to a number so the +/- control starts in the right
   // place.
@@ -103,7 +112,7 @@ export function LayoutEditorPanel({
   const [sliding, setSliding] = useState(device.layout?.sliding ?? true);
   // When on, a category that overflows its block spills into the following
   // empty/continuation blocks automatically (see flowCategoriesAcrossZones).
-  const [autoFlow, setAutoFlow] = useState(device.layout?.autoFlow ?? true);
+  const [autoFlow, setAutoFlow] = useState(initialAutoFlow);
   // Which menu blocks overflow at the current size — only meaningful with
   // sliding off, where every item must fit. Keyed by zone id.
   const [overflowByZone, setOverflowByZone] = useState<Record<string, boolean>>({});
@@ -369,11 +378,13 @@ export function LayoutEditorPanel({
     }
   }
 
-  // Manual edits target the raw zone; the flowed copy tells us whether this
-  // block is an auto-filled continuation slot (then its content is read-only).
+  // Manual edits target the raw zone. The block can still receive overflow from
+  // an earlier block (a category whose heading is hidden here is "received") —
+  // we surface that as a hint, but the block remains editable so a new category
+  // can be added on top of the incoming overflow.
   const sel = zones.find((z) => z.id === selected) ?? null;
-  const selFlowed = flowedZones.find((z) => z.id === selected) ?? null;
-  const selAutoFilled = autoFlow && !!selFlowed?.autoFilled;
+  const selReceivesOverflow =
+    autoFlow && (headingHideByZone.get(selected ?? "")?.size ?? 0) > 0;
 
   // With auto-flow on, overflow spills forward, so only the LAST menu block (in
   // reading order) can legitimately fail to fit — everything earlier just flows
@@ -623,15 +634,15 @@ export function LayoutEditorPanel({
                   </select>
                 </div>
 
-                {selAutoFilled && (
+                {selReceivesOverflow && (
                   <p className="rounded-md border border-border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
-                    Auto-filled — this block shows the overflow from an earlier
-                    block. Turn off “Auto-fill overflow”, or change the first
-                    block’s category, to edit what appears here.
+                    This block also shows overflow flowing in from an earlier
+                    block. Any category you add here appears after that overflow,
+                    and its own leftover flows on to the next block.
                   </p>
                 )}
 
-                {!selAutoFilled && (sel.type === "menu" || sel.type === "featured") && (
+                {(sel.type === "menu" || sel.type === "featured") && (
                   <ul className="max-h-64 space-y-1 overflow-y-auto">
                     {categories.length === 0 && (
                       <li className="text-sm text-muted-foreground">No categories yet.</li>
