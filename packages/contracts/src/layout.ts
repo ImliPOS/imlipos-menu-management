@@ -645,6 +645,9 @@ export interface FlowOptions {
   fontSize?: MenuFont;
   /** Available items per category id, in display order. */
   catalog: Map<string, FlowCatalogCategory>;
+  /** Item ids excluded from THIS display (the operator unticked them so they can
+   *  show on another display). Skipped entirely when building the stream. */
+  hiddenItemIds?: ReadonlySet<string>;
 }
 
 /** Menu zones sorted in reading order: top-to-bottom, then left-to-right.
@@ -769,9 +772,10 @@ function fittingIds(
  */
 export function flowCategoriesAcrossZones(
   zones: LayoutZone[],
-  { logicalHeightDp, logicalWidthDp, fontSize, catalog }: FlowOptions,
+  { logicalHeightDp, logicalWidthDp, fontSize, catalog, hiddenItemIds }: FlowOptions,
 ): LayoutZone[] {
   const m = menuStyle(fontSize);
+  const excluded = hiddenItemIds ?? new Set<string>();
   const out = zones.map((z) => ({ ...z }));
   const byId = new Map(out.map((z) => [z.id, z]));
 
@@ -804,7 +808,8 @@ export function flowCategoriesAcrossZones(
       const cat = catalog.get(cid);
       if (!cat) continue;
       for (const it of cat.items)
-        pending.push({ catId: cat.id, name: cat.name, item: it });
+        if (!excluded.has(it.id))
+          pending.push({ catId: cat.id, name: cat.name, item: it });
     }
 
     if (pending.length === 0) {
@@ -896,4 +901,25 @@ export function ownCategoriesPerZone(zones: LayoutZone[]): LayoutZone[] {
         }
       : z,
   );
+}
+
+/** Item ids actually shown by a saved layout: for each menu/featured zone, its
+ *  categories' items minus that zone's hiddenItemIds, unioned across zones.
+ *  Used to reconstruct a display's per-item selection on load and to compute
+ *  which items already appear on other displays. */
+export function shownItemIdsForLayout(
+  zones: LayoutZone[],
+  catalog: Map<string, { items: { id: string }[] }>,
+): Set<string> {
+  const shown = new Set<string>();
+  for (const z of zones) {
+    if (z.type !== "menu" && z.type !== "featured") continue;
+    const hidden = new Set(z.hiddenItemIds ?? []);
+    for (const cid of z.categoryIds) {
+      const cat = catalog.get(cid);
+      if (!cat) continue;
+      for (const it of cat.items) if (!hidden.has(it.id)) shown.add(it.id);
+    }
+  }
+  return shown;
 }

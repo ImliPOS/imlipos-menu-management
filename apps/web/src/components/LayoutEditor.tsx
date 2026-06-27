@@ -25,6 +25,7 @@ import {
   ownCategoriesPerZone,
   paginateMenu,
   resolveFontScale,
+  shownItemIdsForLayout,
   zonesInReadingOrder,
   type Category,
   type Device,
@@ -113,6 +114,15 @@ export function LayoutEditorPanel({
   // When on, a category that overflows its block spills into the following
   // empty/continuation blocks automatically (see flowCategoriesAcrossZones).
   const [autoFlow, setAutoFlow] = useState(initialAutoFlow);
+  // Items the operator excluded from THIS display so they can show on another
+  // display. Reconstructed from the saved layout once the catalog loads.
+  const [displayHidden, setDisplayHidden] = useState<Set<string>>(new Set());
+  const reconstructedRef = useRef(false);
+  // All of the shop's other displays (with layouts) — to show which items are
+  // already placed elsewhere when splitting a category across displays.
+  const [otherDevices, setOtherDevices] = useState<Device[]>([]);
+  // Picker filter: hide items already shown on another display.
+  const [hideAssignedElsewhere, setHideAssignedElsewhere] = useState(false);
   // Which menu blocks overflow at the current size — only meaningful with
   // sliding off, where every item must fit. Keyed by zone id.
   const [overflowByZone, setOverflowByZone] = useState<Record<string, boolean>>({});
@@ -180,7 +190,12 @@ export function LayoutEditorPanel({
   useEffect(() => {
     api.listCategories().then(setCategories).catch(console.error);
     api.listItems().then(setItems).catch(console.error);
-  }, []);
+    // Other displays (with layouts) for cross-display awareness.
+    api
+      .listDevices()
+      .then((ds) => setOtherDevices(ds.filter((d) => d.id !== device.id)))
+      .catch(console.error);
+  }, [device.id]);
 
   // Available categories / items keyed for the scaled menu preview (matches how
   // the TV resolves a menu zone: categoryIds order, items by sortOrder).
@@ -259,6 +274,45 @@ export function LayoutEditorPanel({
     return m;
   }, [categories, itemsByCat, fontScale, fontsReady, measureText]);
 
+  // Reconstruct the per-display item exclusions from the saved layout once the
+  // catalog is loaded: an assigned category's available items that the saved
+  // zones don't show were excluded by the operator (auto-flow's leftover-dump
+  // guarantees every included item renders somewhere, so "not shown" = excluded).
+  useEffect(() => {
+    if (reconstructedRef.current || catalog.size === 0) return;
+    const saved = device.layout?.zones ?? [];
+    reconstructedRef.current = true;
+    const shown = shownItemIdsForLayout(saved, catalog);
+    const assigned = new Set(
+      saved
+        .filter((z) => z.type === "menu" || z.type === "featured")
+        .flatMap((z) => z.categoryIds),
+    );
+    const hidden = new Set<string>();
+    for (const cid of assigned) {
+      for (const it of catalog.get(cid)?.items ?? [])
+        if (!shown.has(it.id)) hidden.add(it.id);
+    }
+    if (hidden.size) setDisplayHidden(hidden);
+  }, [catalog, device.layout?.zones]);
+
+  // Item id → names of OTHER displays that already show it. Drives the "already
+  // on another display" hints and the unassigned filter when splitting a
+  // category across displays.
+  const shownElsewhere = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const d of otherDevices) {
+      if (!d.layout?.zones) continue;
+      const label = d.name?.trim() || "another display";
+      for (const id of shownItemIdsForLayout(d.layout.zones, catalog)) {
+        const arr = m.get(id);
+        if (arr) arr.push(label);
+        else m.set(id, [label]);
+      }
+    }
+    return m;
+  }, [otherDevices, catalog]);
+
   // The zones actually previewed and saved. With auto-flow on, each block's
   // overflow spills into the following empty/continuation blocks; off, the
   // operator's manual assignment is used verbatim. Guard on a loaded catalog so
@@ -270,8 +324,9 @@ export function LayoutEditorPanel({
       logicalWidthDp: logicalW,
       fontSize: fontScale,
       catalog,
+      hiddenItemIds: displayHidden,
     });
-  }, [autoFlow, zones, catalog, logicalHeightDp, logicalW, fontScale]);
+  }, [autoFlow, zones, catalog, logicalHeightDp, logicalW, fontScale, displayHidden]);
 
   // Category ids whose heading is suppressed per block — a category that spills
   // across blocks prints its heading only in the first block it appears in.
@@ -393,6 +448,38 @@ export function LayoutEditorPanel({
       }),
     );
     setSaved(false);
+  }
+
+  // Toggle whether an item shows on THIS display (auto-flow mode). Checked =
+  // shown here; unchecked adds it to displayHidden so it can show on another
+  // display, and auto-flow re-spreads the rest.
+  function toggleDisplayItem(itemId: string) {
+    setDisplayHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+    setSaved(false);
+  }
+
+  // Add/remove a category for this display (auto-flow). On a fresh add, default
+  // this display to only the items not already on another display — so covering
+  // a long category across displays doesn't duplicate rows.
+  function toggleCategoryForDisplay(zoneId: string, catId: string) {
+    const wasAssigned = zones.some((z) => z.categoryIds.includes(catId));
+    toggleCat(zoneId, catId);
+    if (autoFlow && !wasAssigned) {
+      const dupes = (itemsByCat.get(catId) ?? []).filter(
+        (it) => shownElsewhere.get(it.id)?.length,
+      );
+      if (dupes.length)
+        setDisplayHidden((prev) => {
+          const next = new Set(prev);
+          for (const it of dupes) next.add(it.id);
+          return next;
+        });
+    }
   }
 
   async function uploadFor(zoneId: string, file: File) {
@@ -684,6 +771,17 @@ export function LayoutEditorPanel({
                   </p>
                 )}
 
+                {sel.type === "menu" && autoFlow && otherDevices.length > 0 && (
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={hideAssignedElsewhere}
+                      onChange={(e) => setHideAssignedElsewhere(e.target.checked)}
+                    />
+                    Hide items already on another display
+                  </label>
+                )}
+
                 {(sel.type === "menu" || sel.type === "featured") && (
                   <ul className="max-h-64 space-y-1 overflow-y-auto">
                     {categories.length === 0 && (
@@ -701,7 +799,7 @@ export function LayoutEditorPanel({
                             <input
                               type="checkbox"
                               checked={enabled}
-                              onChange={() => toggleCat(sel.id, c.id)}
+                              onChange={() => toggleCategoryForDisplay(sel.id, c.id)}
                             />
                             {c.name}
                             {alsoElsewhere && (
@@ -710,10 +808,7 @@ export function LayoutEditorPanel({
                               </span>
                             )}
                           </label>
-                          {/* Once a category is on, pick which of its items show
-                              in THIS block (independent of other blocks). With
-                              auto-flow on the split is computed, so the per-item
-                              picker is replaced by a short hint. */}
+                          {/* Manual mode: pick which items show in THIS block. */}
                           {sel.type === "menu" && enabled && !autoFlow && (
                             <CategoryItemPicker
                               items={itemsByCat.get(c.id) ?? []}
@@ -722,11 +817,17 @@ export function LayoutEditorPanel({
                               onToggle={(itemId) => toggleItem(sel.id, itemId)}
                             />
                           )}
+                          {/* Auto-flow: pick which items show on THIS display
+                              (the rest can go on another display); auto-flow then
+                              spreads the chosen items across the columns. */}
                           {sel.type === "menu" && enabled && autoFlow && (
-                            <p className="ml-6 mt-1 text-xs italic text-muted-foreground opacity-70">
-                              Items auto-distributed across this and the following
-                              empty blocks.
-                            </p>
+                            <DisplayItemPicker
+                              items={itemsByCat.get(c.id) ?? []}
+                              hiddenIds={displayHidden}
+                              shownElsewhere={shownElsewhere}
+                              hideAssignedElsewhere={hideAssignedElsewhere}
+                              onToggle={toggleDisplayItem}
+                            />
                           )}
                         </li>
                       );
@@ -868,6 +969,81 @@ function CategoryItemPicker({
                   {locked && (
                     <span className="shrink-0 text-[10px] italic text-muted-foreground">
                       in another block
+                    </span>
+                  )}
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    ₹{Number(it.price)}
+                  </span>
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </details>
+  );
+}
+
+/**
+ * Per-display item picker (auto-flow mode). Checked = the item shows on THIS
+ * display; unchecking lets it show on another display instead. Items already on
+ * another display are labelled so a long category can be split across displays
+ * without duplicating or missing items.
+ */
+function DisplayItemPicker({
+  items,
+  hiddenIds,
+  shownElsewhere,
+  hideAssignedElsewhere,
+  onToggle,
+}: {
+  items: Item[];
+  /** Item ids excluded from this display (unchecked). */
+  hiddenIds: Set<string>;
+  /** Item id → names of other displays already showing it. */
+  shownElsewhere: Map<string, string[]>;
+  /** Hide items already on another display (and not here). */
+  hideAssignedElsewhere: boolean;
+  onToggle: (itemId: string) => void;
+}) {
+  const here = (it: Item) => !hiddenIds.has(it.id);
+  const elsewhere = (it: Item) => (shownElsewhere.get(it.id)?.length ?? 0) > 0;
+  const visible = items.filter(
+    (it) => !hideAssignedElsewhere || here(it) || !elsewhere(it),
+  );
+  const hereN = items.filter(here).length;
+  const elsewhereN = items.filter((it) => !here(it) && elsewhere(it)).length;
+  const unassignedN = items.filter((it) => !here(it) && !elsewhere(it)).length;
+  return (
+    <details className="ml-6 mt-1">
+      <summary className="cursor-pointer select-none text-xs text-muted-foreground">
+        On this display — {hereN}/{items.length}
+        {elsewhereN > 0 && (
+          <span className="opacity-70"> · {elsewhereN} on other displays</span>
+        )}
+        {unassignedN > 0 && <span className="opacity-70"> · {unassignedN} unassigned</span>}
+      </summary>
+      {items.length === 0 ? (
+        <p className="mt-1 text-xs text-muted-foreground">No items in this category.</p>
+      ) : (
+        <ul className="mt-1 space-y-1">
+          {visible.map((it) => {
+            const others = shownElsewhere.get(it.id) ?? [];
+            return (
+              <li key={it.id}>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={here(it)}
+                    onChange={() => onToggle(it.id)}
+                  />
+                  <span className="min-w-0 flex-1 truncate">{it.name}</span>
+                  {others.length > 0 && (
+                    <span
+                      className="shrink-0 text-[10px] italic text-muted-foreground"
+                      title={others.join(", ")}
+                    >
+                      on {others.length === 1 ? others[0] : `${others.length} displays`}
                     </span>
                   )}
                   <span className="shrink-0 text-xs text-muted-foreground">
