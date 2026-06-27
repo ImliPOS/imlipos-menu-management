@@ -723,13 +723,18 @@ function fittingIds(
   innerW: number,
   innerH: number,
   m: MenuStyle,
+  /** When true, the FIRST category's heading is suppressed here (it's a
+   *  continuation from an earlier block), so reserve no titleH for it — matching
+   *  what actually renders. Otherwise the block under-fills by a phantom heading. */
+  firstHeadingHidden = false,
 ): Set<string> {
   const kept = new Set<string>();
   let used = 0;
   let first = true;
   for (const c of cats) {
     if (c.items.length === 0) continue;
-    const need = (first ? 0 : m.catGap) + m.titleH;
+    const headingH = first && firstHeadingHidden ? 0 : m.titleH;
+    const need = (first ? 0 : m.catGap) + headingH;
     if (used + need > innerH) break; // no room even for the heading
     used += need;
     first = false;
@@ -782,6 +787,7 @@ export function flowCategoriesAcrossZones(
   type Pending = { catId: string; name: string; item: MenuPageItem };
   const pending: Pending[] = [];
   const seenCats = new Set<string>(); // categories already injected into the stream
+  const shownCats = new Set<string>(); // categories with ≥1 item placed in an earlier block
   let lastFilledId: string | null = null;
 
   for (const z0 of zonesInReadingOrder(zones)) {
@@ -806,8 +812,11 @@ export function flowCategoriesAcrossZones(
       continue;
     }
 
-    // Fill this block from the front of the stream up to its capacity.
-    const kept = fittingIds(groupToCats(pending), innerW, innerH, m);
+    // Fill this block from the front of the stream up to its capacity. If the
+    // leading category already showed items in an earlier block, its heading is
+    // hidden here (continuation), so don't reserve a heading for it.
+    const firstHeadingHidden = shownCats.has(pending[0]!.catId);
+    const kept = fittingIds(groupToCats(pending), innerW, innerH, m, firstHeadingHidden);
     const taken: Pending[] = [];
     while (pending.length && kept.has(pending[0]!.item.id))
       taken.push(pending.shift()!);
@@ -816,6 +825,7 @@ export function flowCategoriesAcrossZones(
     for (const t of taken) {
       if (!catIds.includes(t.catId)) catIds.push(t.catId);
       shown.add(t.item.id);
+      shownCats.add(t.catId);
     }
     work.set(z0.id, { catIds, shown });
     if (taken.length) lastFilledId = z0.id;
