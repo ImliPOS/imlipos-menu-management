@@ -146,28 +146,38 @@ export function MenuScreen({
     };
   }, [deviceToken, screenId, refresh, unpair]);
 
-  // Auto-apply OTA updates. A kiosk rarely restarts, and expo-updates only
-  // applies a downloaded update on the next launch — so we poll for updates and
-  // reload when one is available, keeping the panel on the latest JS without a
-  // manual restart. (No-op in dev / when updates are disabled.)
+  // Auto-apply OTA updates — safely. A kiosk rarely restarts, so we poll and
+  // reload to pick up new JS. But we apply any given update only ONCE: if a
+  // downloaded update fails to launch, expo-updates reverts to the previous
+  // bundle while checkForUpdateAsync keeps reporting it "available" — which
+  // turned into an endless fetch→reload→revert loop (white-flash) that bricked
+  // panels. We persist the last update id we tried and never re-apply the same
+  // one, so a bad update just leaves the panel on the working bundle; a *newer*
+  // (fixed) update still rolls out normally. (No-op in dev / updates disabled.)
   useEffect(() => {
     if (!Updates.isEnabled) return;
     let cancelled = false;
     const check = async () => {
       try {
         const res = await Updates.checkForUpdateAsync();
-        if (!cancelled && res.isAvailable) {
-          await Updates.fetchUpdateAsync();
-          await Updates.reloadAsync();
-        }
+        if (cancelled || !res.isAvailable) return;
+        const updateId = res.manifest?.id;
+        if (updateId && updateId === (await store.get("otaTriedId"))) return;
+        await Updates.fetchUpdateAsync();
+        if (cancelled) return;
+        if (updateId) await store.set("otaTriedId", updateId);
+        await Updates.reloadAsync();
       } catch {
         // offline / transient — try again next tick.
       }
     };
-    check();
+    // Let the app prove it runs for a minute before pulling updates, so a fresh
+    // launch (or a just-reverted bad update) doesn't immediately re-attempt.
+    const first = setTimeout(check, 60_000);
     const id = setInterval(check, 15 * 60 * 1000); // every 15 min
     return () => {
       cancelled = true;
+      clearTimeout(first);
       clearInterval(id);
     };
   }, []);

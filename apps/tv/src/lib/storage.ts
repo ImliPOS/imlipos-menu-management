@@ -7,6 +7,9 @@ const KEYS = {
   claimToken: "imlipos.claimToken",
   screenId: "imlipos.screenId",
   hardwareId: "imlipos.hardwareId",
+  // Id of the last OTA update we attempted — so a failed update is never
+  // re-applied in a loop (see MenuScreen's auto-update effect).
+  otaTriedId: "imlipos.otaTriedId",
 } as const;
 
 export const store = {
