@@ -58,8 +58,8 @@ export default function Categories() {
   if (loading) return <PageSpinner />;
 
   return (
-    <div className="mx-auto max-w-3xl p-8">
-      <div className="mb-6 flex items-center justify-between">
+    <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
+      <div className="mb-6 flex items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           {categories.length} categor{categories.length === 1 ? "y" : "ies"}
         </p>

@@ -61,7 +61,7 @@ export default function Menu() {
 
   if (categories.length === 0)
     return (
-      <div className="mx-auto max-w-4xl p-8">
+      <div className="mx-auto max-w-4xl p-4 sm:p-6 lg:p-8">
         <p className="text-muted-foreground">
           No categories yet. Create some under{" "}
           <Link href="/categories" className="text-foreground underline">
@@ -73,8 +73,8 @@ export default function Menu() {
     );
 
   return (
-    <div className="mx-auto max-w-4xl p-8">
-      <div className="mb-6 flex items-center justify-between">
+    <div className="mx-auto max-w-4xl p-4 sm:p-6 lg:p-8">
+      <div className="mb-6 flex items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           {items.length} item{items.length === 1 ? "" : "s"} across {categories.length}{" "}
           categor{categories.length === 1 ? "y" : "ies"}
@@ -104,24 +104,32 @@ export default function Menu() {
             </h2>
             <ul className="divide-y divide-border rounded-lg border border-border bg-card">
               {catItems.map((it) => (
-                <li key={it.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <li
+                  key={it.id}
+                  className="flex items-center justify-between gap-2 px-3 py-3 sm:gap-3 sm:px-4"
+                >
                   <div className="flex min-w-0 items-center gap-3">
                     <Thumb url={it.mediaUrl} />
-                    <span className={it.isAvailable ? "" : "text-muted-foreground line-through"}>
+                    <span
+                      className={`truncate ${it.isAvailable ? "" : "text-muted-foreground line-through"}`}
+                    >
                       {it.name} — ₹{it.price}
                     </span>
                     {it.isFeatured && (
                       <span
-                        className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-300"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-300"
                         title="Featured on display"
                       >
-                        <Star className="size-3 fill-current" /> Featured
+                        <Star className="size-3 fill-current" />
+                        <span className="hidden sm:inline">Featured</span>
                       </span>
                     )}
                   </div>
-                  <div className="flex shrink-0 items-center gap-3">
+                  <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                    {/* The switch already conveys availability; the text badge is
+                        redundant on narrow screens, so hide it there. */}
                     <span
-                      className={`rounded-md px-3 py-1 text-sm ${
+                      className={`hidden rounded-md px-3 py-1 text-sm sm:inline-block ${
                         it.isAvailable
                           ? "bg-green-500/15 text-green-300"
                           : "bg-red-500/15 text-red-300"
@@ -140,7 +148,7 @@ export default function Menu() {
                       onSaved={upsertItem}
                       trigger={
                         <button
-                          className="text-muted-foreground hover:text-foreground"
+                          className="p-1 text-muted-foreground hover:text-foreground"
                           aria-label={`Edit ${it.name}`}
                         >
                           <Pencil className="size-4" />
@@ -149,7 +157,7 @@ export default function Menu() {
                     />
                     <button
                       onClick={() => deleteItem(it)}
-                      className="text-muted-foreground hover:text-red-400"
+                      className="p-1 text-muted-foreground hover:text-red-400"
                       aria-label={`Delete ${it.name}`}
                     >
                       <Trash2Icon className="size-4" />

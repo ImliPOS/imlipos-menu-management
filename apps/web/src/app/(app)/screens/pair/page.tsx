@@ -58,9 +58,9 @@ export default function PairDevice() {
   const screenById = new Map(screens.map((s) => [s.id, s]));
 
   return (
-    <div className="mx-auto max-w-5xl p-8">
+    <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
       {/* Header: live count + Pair Device button */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-medium">Paired Displays</h2>
           <span className="rounded-full bg-secondary px-2 py-0.5 text-sm text-muted-foreground">

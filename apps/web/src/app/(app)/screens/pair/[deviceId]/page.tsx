@@ -54,7 +54,7 @@ export default function DeviceDetail() {
   if (loading) return <PageSpinner />;
   if (!device)
     return (
-      <div className="mx-auto max-w-4xl p-8">
+      <div className="mx-auto max-w-4xl p-4 sm:p-6 lg:p-8">
         <p className="text-muted-foreground">Display not found.</p>
         <Link href="/screens/pair" className="text-foreground underline">
           Back to displays
@@ -97,7 +97,7 @@ export default function DeviceDetail() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl p-8">
+    <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
       <Link
         href="/screens/pair"
         className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -105,8 +105,8 @@ export default function DeviceDetail() {
         <ArrowLeft className="size-4" /> Paired Displays
       </Link>
 
-      <div className="mb-6 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
           {renaming ? (
             <form
               onSubmit={(e) => {
@@ -122,7 +122,7 @@ export default function DeviceDetail() {
                 maxLength={80}
                 autoFocus
                 disabled={savingName}
-                className="h-9 w-56 text-lg"
+                className="h-9 min-w-0 flex-1 text-lg sm:w-56 sm:flex-none"
                 onKeyDown={(e) => e.key === "Escape" && setRenaming(false)}
               />
               <Button
@@ -149,10 +149,10 @@ export default function DeviceDetail() {
               type="button"
               onClick={startRename}
               title="Rename display"
-              className="group inline-flex items-center gap-2 rounded-md text-left hover:opacity-90"
+              className="group inline-flex min-w-0 items-center gap-2 rounded-md text-left hover:opacity-90"
             >
-              <h1 className="text-2xl font-semibold">{label}</h1>
-              <PencilIcon className="size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+              <h1 className="truncate text-2xl font-semibold">{label}</h1>
+              <PencilIcon className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 sm:group-hover:opacity-100" />
             </button>
           )}
           <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -163,7 +163,7 @@ export default function DeviceDetail() {
 
         <AlertDialog onOpenChange={(o) => !o && setConfirmText("")}>
           <AlertDialogTrigger asChild>
-            <Button variant="destructive">
+            <Button variant="destructive" className="w-full shrink-0 sm:w-auto">
               <Trash2Icon className="size-4" />
               Remove display
             </Button>
@@ -198,7 +198,7 @@ export default function DeviceDetail() {
       </div>
 
       {/* Details */}
-      <section className="mb-10 grid grid-cols-2 gap-x-8 gap-y-3 rounded-xl border border-border bg-card p-6 text-sm sm:grid-cols-3">
+      <section className="mb-10 grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl border border-border bg-card p-4 text-sm sm:grid-cols-3 sm:gap-x-8 sm:p-6">
         <Detail label="Orientation">
           {screen ? (
             <OrientationToggle value={screen.orientation} onChange={setOrientation} />
