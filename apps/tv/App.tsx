@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { View } from "react-native";
 import { useFonts } from "expo-font";
+import { useKeepAwake } from "expo-keep-awake";
 // Import the three weights by subpath so only these TTFs are bundled (importing
 // from the package index pulls in all ~18 weights — needless OTA weight).
 import { store } from "./src/lib/storage";
@@ -13,6 +14,10 @@ type State =
   | { phase: "paired"; deviceToken: string; screenId: string };
 
 export default function App() {
+  // Keep the panel awake — this is a kiosk menu board. Holds Android's
+  // FLAG_KEEP_SCREEN_ON for as long as the app is open, which overrides the TV's
+  // inactivity/sleep timer (no user input ever happens on a menu display).
+  useKeepAwake();
   const [state, setState] = useState<State>({ phase: "loading" });
   // Bundle the menu font so every panel renders identically to the editor
   // preview, regardless of the device's default system font (which varies and

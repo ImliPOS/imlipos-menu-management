@@ -93,6 +93,9 @@ importers:
       expo-image:
         specifier: ~56.0.10
         version: 56.0.10(expo@56.0.9)(react-native-tvos@0.85.3-0)(react@19.2.3)
+      expo-keep-awake:
+        specifier: ^56.0.3
+        version: 56.0.3(expo@56.0.9)(react@19.2.3)
       expo-screen-orientation:
         specifier: ~56.0.5
         version: 56.0.5(expo@56.0.9)(react-native-tvos@0.85.3-0)
