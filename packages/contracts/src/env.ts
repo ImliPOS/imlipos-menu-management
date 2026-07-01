@@ -56,21 +56,37 @@ function normalize(v: string | undefined): AppEnv | null {
  * those explicit overrides are how the client learns its environment (the web
  * build injects NEXT_PUBLIC_APP_ENV; the TV build sets EXPO_PUBLIC_APP_ENV per
  * EAS profile).
+ *
+ * IMPORTANT — do NOT alias `process.env` (e.g. `const env = process.env; env.X`)
+ * or index it dynamically. The Next.js (DefinePlugin) and Expo (babel-preset-
+ * expo) bundlers inline public vars by *textual* substitution of the literal
+ * token `process.env.NEXT_PUBLIC_*` / `process.env.EXPO_PUBLIC_*` only; an
+ * aliased read is never rewritten and resolves to undefined in the client
+ * bundle, silently falling back to "local". Each public var below is therefore
+ * read as a bare literal so it inlines at build time. The server-only vars
+ * (APP_ENV / VERCEL_ENV / RENDER_GIT_BRANCH) stay behind a `process` guard so
+ * their un-inlined access can't throw where `process` is absent (the browser).
  */
 export function resolveAppEnv(): AppEnv {
-  // Cast for portability: RN/Expo's process.env typing lacks an index signature.
-  const env = (((typeof process !== "undefined" && process.env) || {}) as
-    Record<string, string | undefined>);
+  const hasProcess = typeof process !== "undefined" && !!process.env;
 
+  // Public vars — literal reads so Next/Expo inline them into the client bundle.
+  // NEXT_PUBLIC is safe to read unconditionally (web inlines it; RN's process
+  // shim yields undefined). EXPO_PUBLIC stays guarded so its un-inlined web read
+  // can't throw; on native the process shim makes the guard pass.
   const explicit =
-    normalize(env.APP_ENV) ??
-    normalize(env.NEXT_PUBLIC_APP_ENV) ??
-    normalize(env.EXPO_PUBLIC_APP_ENV);
+    normalize(process.env.NEXT_PUBLIC_APP_ENV) ??
+    (hasProcess ? normalize(process.env.EXPO_PUBLIC_APP_ENV) : null) ??
+    (hasProcess ? normalize(process.env.APP_ENV) : null);
   if (explicit) return explicit;
 
-  if (env.VERCEL_ENV) return env.VERCEL_ENV === "production" ? "prod" : "dev";
-  if (env.RENDER_GIT_BRANCH)
-    return env.RENDER_GIT_BRANCH === "main" ? "prod" : "dev";
+  // Server-only branch signals — meaningful only in Node, guarded for the client.
+  if (hasProcess) {
+    if (process.env.VERCEL_ENV)
+      return process.env.VERCEL_ENV === "production" ? "prod" : "dev";
+    if (process.env.RENDER_GIT_BRANCH)
+      return process.env.RENDER_GIT_BRANCH === "main" ? "prod" : "dev";
+  }
 
   return "local";
 }
