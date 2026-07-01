@@ -12,14 +12,16 @@
       "channel": "preview",
       "android": { "buildType": "apk" },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://imlipos-menu-management.onrender.com",
-        "EXPO_PUBLIC_SOCKET_URL": "https://imlipos-menu-management.onrender.com"
+        "EXPO_PUBLIC_APP_ENV": "dev"
       }
     },
     "production": {
       "android": { "buildType": "app-bundle" },
       "channel": "production",
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "prod"
+      }
     }
   },
   "submit": { "production": {} }

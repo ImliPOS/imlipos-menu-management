@@ -1,21 +1,25 @@
 "use client";
 
-import type {
-  Category,
-  CreateCategoryInput,
-  CreateItemInput,
-  CreateScreenInput,
-  Device,
-  Item,
-  PairDeviceInput,
-  Screen,
-  UpdateItemInput,
-  DeviceLayout,
+import {
+  appUrls,
+  resolveAppEnv,
+  type Category,
+  type CreateCategoryInput,
+  type CreateItemInput,
+  type CreateScreenInput,
+  type Device,
+  type Item,
+  type PairDeviceInput,
+  type Screen,
+  type UpdateItemInput,
+  type DeviceLayout,
 } from "@imlipos/contracts";
 
 import { supabase } from "./supabase";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+// Auto-derived from the branch (main → prod, preview → dev, local → localhost).
+// Set NEXT_PUBLIC_API_URL only to override.
+const API = process.env.NEXT_PUBLIC_API_URL ?? appUrls(resolveAppEnv()).apiUrl;
 
 /** The Supabase access token for the current session. */
 async function getApiToken(): Promise<string> {

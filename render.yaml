@@ -14,16 +14,14 @@ services:
       - key: NODE_ENV
         value: production
       # Secrets — set these in the Render dashboard (sync:false keeps them out of git).
+      # URLs (WEB_ORIGIN, SUPABASE_URL) auto-derive from RENDER_GIT_BRANCH via the
+      # shared map in packages/contracts (main → prod, any other branch → dev), so
+      # only the secret values below need setting per service.
       - key: DATABASE_URL
-        sync: false
-      - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: SUPABASE_STORAGE_BUCKET
         value: menu-media
       - key: DEVICE_JWT_SECRET
-        sync: false
-      # Your deployed web app origin (for CORS + Socket.IO).
-      - key: WEB_ORIGIN
         sync: false
