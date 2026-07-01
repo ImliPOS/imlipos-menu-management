@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import { appUrls, resolveAppEnv } from "@imlipos/contracts";
 
 /**
  * Resolve the API base URL.
@@ -8,9 +9,11 @@ import Constants from "expo-constants";
  * so we reuse that host and just swap the port to the API's (4000).
  *
  * Priority:
- *   1. EXPO_PUBLIC_API_URL (explicit override, e.g. a deployed API)
- *   2. The Expo dev server host (LAN IP) + API port
- *   3. 10.0.2.2 fallback (Android emulator → host)
+ *   1. EXPO_PUBLIC_API_URL (explicit override)
+ *   2. A built app's environment (EXPO_PUBLIC_APP_ENV=dev|prod, set per EAS
+ *      profile) → the matching deployed API from the shared env map
+ *   3. The Expo dev server host (LAN IP) + API port
+ *   4. 10.0.2.2 fallback (Android emulator → host)
  */
 const API_PORT = 4000;
 
@@ -27,6 +30,10 @@ function devServerHost(): string | null {
 
 function resolveApiUrl(): string {
   if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
+  // A dev/prod build declares its env via the EAS profile → use the map.
+  const env = resolveAppEnv();
+  if (env !== "local") return appUrls(env).apiUrl;
+  // Local Expo dev → reuse the dev server's LAN host (or emulator fallback).
   const host = devServerHost();
   if (host) return `http://${host}:${API_PORT}`;
   return `http://10.0.2.2:${API_PORT}`;
