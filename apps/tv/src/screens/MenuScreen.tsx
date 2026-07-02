@@ -22,8 +22,10 @@ import {
   menuStyle,
   paginateMenu,
 } from "@imlipos/contracts";
+import { DEFAULT_THEME } from "@imlipos/contracts";
 import type {
   DeviceContent,
+  LayoutTheme,
   MenuCategoryView,
   MenuFont,
   MenuPageCategory,
@@ -257,8 +259,16 @@ export function MenuScreen({
     })),
   );
 
+  // Merge over the defaults so a theme stored before a colour was added (e.g.
+  // the divider) still resolves every key.
+  const theme = { ...DEFAULT_THEME, ...content.theme };
+
   return (
-    <Pressable onLongPress={confirmReset} delayLongPress={2000} style={styles.root}>
+    <Pressable
+      onLongPress={confirmReset}
+      delayLongPress={2000}
+      style={[styles.root, { backgroundColor: theme.background }]}
+    >
       {!online && (
         <View style={styles.offline}>
           <Text style={styles.offlineText}>OFFLINE — showing last menu</Text>
@@ -276,13 +286,14 @@ export function MenuScreen({
                 width: `${z.w}%`,
                 height: `${z.h}%`,
               },
-              menuDivider(z, content.zones),
+              menuDivider(z, content.zones, theme.divider),
             ]}
           >
             <Zone
               zone={z}
               fontSize={content.fontSize ?? "medium"}
               sliding={content.sliding ?? true}
+              theme={theme}
               hideHeadings={hideHeadings.get(z.id)}
             />
           </View>
@@ -296,11 +307,13 @@ function Zone({
   zone,
   fontSize,
   sliding,
+  theme,
   hideHeadings,
 }: {
   zone: ResolvedZone;
   fontSize: MenuFont;
   sliding: boolean;
+  theme: LayoutTheme;
   /** Category ids whose heading is suppressed here (continuation block). */
   hideHeadings?: Set<string>;
 }) {
@@ -358,6 +371,7 @@ function Zone({
       cats={cats}
       fontSize={fontSize}
       sliding={sliding}
+      theme={theme}
       hideHeadings={hideHeadings}
     />
   );
@@ -368,8 +382,11 @@ function Zone({
 // there is *also* a menu. Each shared edge is "owned" by the left/top zone, so
 // the line is drawn exactly once (never against image/video blocks).
 const DIVIDER_W = 2;
-const DIVIDER_COLOR = "#52525b";
-function menuDivider(zone: ResolvedZone, zones: ResolvedZone[]): ViewStyle | null {
+function menuDivider(
+  zone: ResolvedZone,
+  zones: ResolvedZone[],
+  color: string,
+): ViewStyle | null {
   if (zone.type !== "menu") return null;
   const EPS = 0.5; // percentage tolerance for "touching" edges
   const aRight = zone.x + zone.w;
@@ -384,7 +401,7 @@ function menuDivider(zone: ResolvedZone, zones: ResolvedZone[]): ViewStyle | nul
     if (hOverlap && Math.abs(aBottom - b.y) < EPS) borderBottomWidth = DIVIDER_W;
   }
   if (!borderRightWidth && !borderBottomWidth) return null;
-  return { borderColor: DIVIDER_COLOR, borderRightWidth, borderBottomWidth };
+  return { borderColor: color, borderRightWidth, borderBottomWidth };
 }
 
 // Looping, muted, auto-playing background video. expo-av's <Video> was removed
@@ -416,11 +433,13 @@ function PagedMenu({
   cats,
   fontSize,
   sliding,
+  theme,
   hideHeadings,
 }: {
   cats: MenuCategoryView[];
   fontSize: MenuFont;
   sliding: boolean;
+  theme: LayoutTheme;
   hideHeadings?: Set<string>;
 }) {
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -499,6 +518,7 @@ function PagedMenu({
           key={pc.id}
           pc={pc}
           ms={ms}
+          theme={theme}
           hideTitle={hideHeadings?.has(pc.id) ?? false}
           wrap={!sliding}
         />
@@ -508,7 +528,7 @@ function PagedMenu({
         <View style={styles.cyclingCategory}>
           {!hideHeadings?.has(current.catId) && (
             <Text
-              style={[styles.catTitle, catTitleSize(ms)]}
+              style={[styles.catTitle, catTitleSize(ms), { color: theme.heading }]}
               numberOfLines={1}
               allowFontScaling={false}
             >
@@ -517,7 +537,7 @@ function PagedMenu({
           )}
           <View style={styles.pagedViewport}>
             <Animated.View style={{ transform: [{ translateX: x }] }}>
-              <MenuItemRows items={current.items} ms={ms} />
+              <MenuItemRows items={current.items} ms={ms} theme={theme} />
             </Animated.View>
           </View>
         </View>
@@ -529,11 +549,13 @@ function PagedMenu({
 function MenuCategoryRows({
   pc,
   ms,
+  theme,
   hideTitle = false,
   wrap = false,
 }: {
   pc: MenuPageCategory;
   ms: MenuStyle;
+  theme: LayoutTheme;
   /** Suppress the heading — this category continues from an earlier block. */
   hideTitle?: boolean;
   /** Let item names wrap to a 2nd line. */
@@ -543,14 +565,14 @@ function MenuCategoryRows({
     <View style={{ marginBottom: ms.catGap }}>
       {!hideTitle && (
         <Text
-          style={[styles.catTitle, catTitleSize(ms)]}
+          style={[styles.catTitle, catTitleSize(ms), { color: theme.heading }]}
           numberOfLines={1}
           allowFontScaling={false}
         >
           {pc.name}
         </Text>
       )}
-      <MenuItemRows items={pc.items} ms={ms} wrap={wrap} />
+      <MenuItemRows items={pc.items} ms={ms} theme={theme} wrap={wrap} />
     </View>
   );
 }
@@ -558,10 +580,12 @@ function MenuCategoryRows({
 function MenuItemRows({
   items,
   ms,
+  theme,
   wrap = false,
 }: {
   items: MenuPageItem[];
   ms: MenuStyle;
+  theme: LayoutTheme;
   /** Let the name wrap to a 2nd line (then ellipsise). Only in sliding-off mode,
    *  where the editor reserved the matching height per item; sliding-on keeps a
    *  single line so the metric-based cycling pagination stays exact. */
@@ -572,14 +596,14 @@ function MenuItemRows({
       {items.map((it) => (
         <View key={it.id} style={[styles.row, { paddingVertical: ms.itemPadV }]}>
           <Text
-            style={[styles.item, itemSize(ms)]}
+            style={[styles.item, itemSize(ms), { color: theme.text }]}
             numberOfLines={wrap ? 2 : 1}
             allowFontScaling={false}
           >
             {it.name}
           </Text>
           <Text
-            style={[styles.price, itemSize(ms)]}
+            style={[styles.price, itemSize(ms), { color: theme.text }]}
             numberOfLines={1}
             allowFontScaling={false}
           >
@@ -604,7 +628,7 @@ const itemSize = (ms: MenuStyle) => ({
 });
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#0a0a0a" },
+  root: { flex: 1, backgroundColor: "#000000" },
   canvas: { flex: 1, position: "relative" },
   fill: { width: "100%", height: "100%", backgroundColor: "#161616" },
   placeholder: { width: "100%", height: "100%", backgroundColor: "#161616" },
@@ -624,7 +648,7 @@ const styles = StyleSheet.create({
   // Colour + bundled font weight (the family carries the weight on Android, so
   // fontFamily replaces fontWeight). Size, line height and gaps come from the
   // active font preset (see catTitleSize / itemSize / the inline catGap).
-  catTitle: { color: "#f5d90a", fontFamily: FONT_BLACK },
+  catTitle: { color: "#ffd700", fontFamily: FONT_BLACK },
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
