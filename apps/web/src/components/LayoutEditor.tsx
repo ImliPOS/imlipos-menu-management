@@ -14,6 +14,7 @@ const previewFont = Roboto({
 });
 import {
   continuationHeadingIds,
+  DEFAULT_THEME,
   flowCategoriesAcrossZones,
   LAYOUT_TEMPLATES,
   MENU_BLOCK_PAD,
@@ -31,6 +32,7 @@ import {
   type Device,
   type FlowCatalogCategory,
   type Item,
+  type LayoutTheme,
   type LayoutZone,
   type MenuFont,
   type MenuPageCategory,
@@ -45,6 +47,13 @@ import { Switch } from "@/components/ui/switch";
 
 const field =
   "h-9 w-full max-w-sm rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring";
+
+// Four swatch presets per colour picker; any other colour is available via the
+// native colour input ("+") beside the swatches.
+const BG_PRESETS = ["#000000", "#1c1917", "#0f172a", "#ffffff"];
+const TEXT_PRESETS = ["#ffffff", "#e5e7eb", "#ffd700", "#0a0a0a"];
+const HEADING_PRESETS = ["#ffd700", "#ffffff", "#f97316", "#38bdf8"];
+const DIVIDER_PRESETS = ["#52525b", "#3f3f46", "#ffffff", "#ffd700"];
 
 const ZONE_COLORS: Record<string, string> = {
   menu: "border-sky-500/60 bg-sky-500/10 text-sky-200",
@@ -111,6 +120,18 @@ export function LayoutEditorPanel({
     }
   };
   const [sliding, setSliding] = useState(device.layout?.sliding ?? true);
+  // Per-display colour theme (background / item text / category heading). Older
+  // layouts without a theme fall back to the original dark look.
+  // Merge over the defaults so a layout saved before a colour was added (e.g.
+  // the divider) backfills that key instead of leaving it undefined.
+  const [theme, setTheme] = useState<LayoutTheme>(() => ({
+    ...DEFAULT_THEME,
+    ...device.layout?.theme,
+  }));
+  const patchTheme = (patch: Partial<LayoutTheme>) => {
+    setTheme((t) => ({ ...t, ...patch }));
+    setSaved(false);
+  };
   // When on, a category that overflows its block spills into the following
   // empty/continuation blocks automatically (see flowCategoriesAcrossZones).
   const [autoFlow, setAutoFlow] = useState(initialAutoFlow);
@@ -499,6 +520,7 @@ export function LayoutEditorPanel({
         fontSize: fontScale,
         sliding,
         autoFlow,
+        theme,
       });
       setSaved(true);
       onSaved?.();
@@ -677,14 +699,63 @@ export function LayoutEditorPanel({
       )}
 
       {zones.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label>Colors</Label>
+            {(theme.background !== DEFAULT_THEME.background ||
+              theme.text !== DEFAULT_THEME.text ||
+              theme.heading !== DEFAULT_THEME.heading ||
+              theme.divider !== DEFAULT_THEME.divider) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => patchTheme(DEFAULT_THEME)}
+              >
+                Reset colors
+              </Button>
+            )}
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <ColorField
+              label="Background"
+              value={theme.background}
+              presets={BG_PRESETS}
+              onChange={(background) => patchTheme({ background })}
+            />
+            <ColorField
+              label="Item text"
+              value={theme.text}
+              presets={TEXT_PRESETS}
+              onChange={(text) => patchTheme({ text })}
+            />
+            <ColorField
+              label="Category heading"
+              value={theme.heading}
+              presets={HEADING_PRESETS}
+              onChange={(heading) => patchTheme({ heading })}
+            />
+            <ColorField
+              label="Separator line"
+              value={theme.divider}
+              presets={DIVIDER_PRESETS}
+              onChange={(divider) => patchTheme({ divider })}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Colors apply to every menu block on this display and preview live below.
+          </p>
+        </div>
+      )}
+
+      {zones.length > 0 && (
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Preview */}
           <div>
             <Label>Preview (click a block)</Label>
             <div
               ref={canvasRef}
-              className={`relative mt-2 w-full max-w-xl overflow-hidden rounded-lg border border-border bg-background ${previewFont.className}`}
-              style={{ aspectRatio: String(aspect) }}
+              className={`relative mt-2 w-full max-w-xl overflow-hidden rounded-lg border border-border ${previewFont.className}`}
+              style={{ aspectRatio: String(aspect), backgroundColor: theme.background }}
             >
               {flowedZones.map((z) => (
                 <button
@@ -699,6 +770,9 @@ export function LayoutEditorPanel({
                     top: `${z.y}%`,
                     width: `${z.w}%`,
                     height: `${z.h}%`,
+                    // Menu blocks show the chosen separator-line colour (matches
+                    // the TV's divider); other zone types keep their type tint.
+                    ...(z.type === "menu" ? { borderColor: theme.divider } : {}),
                   }}
                 >
                   {z.type === "menu" && z.categoryIds.length > 0 && scale > 0 ? (
@@ -707,6 +781,7 @@ export function LayoutEditorPanel({
                       scale={scale}
                       fontSize={fontScale}
                       sliding={sliding}
+                      theme={theme}
                       catById={catById}
                       itemsByCat={itemsByCat}
                       onOverflow={reportOverflow}
@@ -1060,6 +1135,66 @@ function DisplayItemPicker({
 }
 
 /**
+ * A single colour control: a labelled row of preset swatches plus a native
+ * colour input for any custom colour. `value` is a hex string; onChange fires
+ * with the picked hex.
+ */
+function ColorField({
+  label,
+  value,
+  presets,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  presets: string[];
+  onChange: (hex: string) => void;
+}) {
+  const normalized = value.toLowerCase();
+  return (
+    <div className="space-y-1.5">
+      <span className="text-sm text-foreground">{label}</span>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {presets.map((c) => {
+          const active = c.toLowerCase() === normalized;
+          return (
+            <button
+              key={c}
+              type="button"
+              aria-label={`${label} ${c}`}
+              title={c}
+              onClick={() => onChange(c)}
+              style={{ backgroundColor: c }}
+              className={`h-7 w-7 rounded-md border transition-transform ${
+                active
+                  ? "border-foreground ring-2 ring-foreground"
+                  : "border-border hover:scale-105"
+              }`}
+            />
+          );
+        })}
+        {/* Custom colour via the native picker. */}
+        <label
+          className="relative inline-flex h-7 w-7 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-dashed border-border text-[10px] text-muted-foreground hover:border-foreground"
+          title="Custom color"
+        >
+          +
+          <input
+            type="color"
+            value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : "#000000"}
+            onChange={(e) => onChange(e.target.value)}
+            className="absolute inset-0 cursor-pointer opacity-0"
+          />
+        </label>
+      </div>
+      <span className="block font-mono text-xs uppercase text-muted-foreground">
+        {value}
+      </span>
+    </div>
+  );
+}
+
+/**
  * Scaled, faithful preview of a menu block — mirrors the TV's typography for the
  * chosen font preset (via menuStyle) multiplied by `scale`, paginated with the
  * shared `paginateMenu`. When content doesn't fit, it cycles through pages every
@@ -1070,6 +1205,7 @@ function MenuBlock({
   scale,
   fontSize,
   sliding,
+  theme,
   catById,
   itemsByCat,
   onOverflow,
@@ -1080,6 +1216,7 @@ function MenuBlock({
   scale: number;
   fontSize: MenuFont;
   sliding: boolean;
+  theme: LayoutTheme;
   catById: Map<string, Category>;
   itemsByCat: Map<string, Item[]>;
   onOverflow: (zoneId: string, overflows: boolean) => void;
@@ -1177,7 +1314,11 @@ function MenuBlock({
   }, [frameCount]);
 
   return (
-    <div ref={ref} className="absolute inset-0 overflow-hidden bg-[#0a0a0a] text-left">
+    <div
+      ref={ref}
+      className="absolute inset-0 overflow-hidden text-left"
+      style={{ backgroundColor: theme.background }}
+    >
       <div
         className="flex h-full w-full flex-col"
         style={{ padding: MENU_BLOCK_PAD * scale }}
@@ -1192,6 +1333,7 @@ function MenuBlock({
                 pc={pc}
                 scale={scale}
                 ms={ms}
+                theme={theme}
                 last={i === simple.length - 1}
                 hideTitle={hideHeadings?.has(pc.id) ?? false}
                 wrap
@@ -1207,6 +1349,7 @@ function MenuBlock({
                 pc={pc}
                 scale={scale}
                 ms={ms}
+                theme={theme}
                 hideTitle={hideHeadings?.has(pc.id) ?? false}
               />
             ))}
@@ -1214,7 +1357,12 @@ function MenuBlock({
             {current && (
               <div className="flex min-h-0 flex-1 flex-col">
                 {!hideHeadings?.has(current.catId) && (
-                  <PreviewCategoryTitle name={current.name} scale={scale} ms={ms} />
+                  <PreviewCategoryTitle
+                    name={current.name}
+                    scale={scale}
+                    ms={ms}
+                    theme={theme}
+                  />
                 )}
                 <div className="min-h-0 flex-1 overflow-hidden">
                   <div
@@ -1225,7 +1373,7 @@ function MenuBlock({
                     }}
                   >
                     {current.items.map((it) => (
-                      <PreviewItemRow key={it.id} it={it} scale={scale} ms={ms} />
+                      <PreviewItemRow key={it.id} it={it} scale={scale} ms={ms} theme={theme} />
                     ))}
                   </div>
                 </div>
@@ -1252,17 +1400,19 @@ function PreviewCategoryTitle({
   name,
   scale,
   ms,
+  theme,
 }: {
   name: string;
   scale: number;
   ms: MenuStyle;
+  theme: LayoutTheme;
 }) {
   return (
     <div
       className="overflow-hidden text-ellipsis whitespace-nowrap"
       style={{
         // 900 to match the TV's bundled Roboto_900Black category heading.
-        color: "#f5d90a",
+        color: theme.heading,
         fontWeight: 900,
         fontSize: ms.titleFont * scale,
         lineHeight: `${ms.titleLine * scale}px`,
@@ -1278,11 +1428,13 @@ function PreviewItemRow({
   it,
   scale,
   ms,
+  theme,
   wrap = false,
 }: {
   it: MenuPageItem;
   scale: number;
   ms: MenuStyle;
+  theme: LayoutTheme;
   /** Allow the name to wrap to a 2nd line (then ellipsise) instead of clipping
    *  to one — matches the TV in sliding-off mode. */
   wrap?: boolean;
@@ -1301,7 +1453,7 @@ function PreviewItemRow({
             : "min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
         }
         style={{
-          color: "#fff",
+          color: theme.text,
           fontSize: ms.itemFont * scale,
           lineHeight: `${ms.itemLine * scale}px`,
           ...(wrap
@@ -1319,7 +1471,7 @@ function PreviewItemRow({
       <span
         className="shrink-0 whitespace-nowrap"
         style={{
-          color: "#fff",
+          color: theme.text,
           fontWeight: 700,
           fontSize: ms.itemFont * scale,
           lineHeight: `${ms.itemLine * scale}px`,
@@ -1335,6 +1487,7 @@ function PreviewCategory({
   pc,
   scale,
   ms,
+  theme,
   last = false,
   hideTitle = false,
   wrap = false,
@@ -1342,6 +1495,7 @@ function PreviewCategory({
   pc: MenuPageCategory;
   scale: number;
   ms: MenuStyle;
+  theme: LayoutTheme;
   /** The last category needs no trailing gap — it would only be dead space
    *  below the final row (and would push a block over the fit check). */
   last?: boolean;
@@ -1352,9 +1506,11 @@ function PreviewCategory({
 }) {
   return (
     <div style={{ marginBottom: last ? 0 : ms.catGap * scale }}>
-      {!hideTitle && <PreviewCategoryTitle name={pc.name} scale={scale} ms={ms} />}
+      {!hideTitle && (
+        <PreviewCategoryTitle name={pc.name} scale={scale} ms={ms} theme={theme} />
+      )}
       {pc.items.map((it) => (
-        <PreviewItemRow key={it.id} it={it} scale={scale} ms={ms} wrap={wrap} />
+        <PreviewItemRow key={it.id} it={it} scale={scale} ms={ms} theme={theme} wrap={wrap} />
       ))}
     </div>
   );
