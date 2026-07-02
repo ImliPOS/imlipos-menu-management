@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ImageIcon, Pencil, PlusIcon, Star, Trash2Icon, UploadCloud, X } from "lucide-react";
+import { ImageIcon, Pencil, PlusIcon, Search, Star, Trash2Icon, UploadCloud, X } from "lucide-react";
 import type { Category, Item } from "@imlipos/contracts";
 import { api, uploadMedia } from "@/lib/api";
 import { PageSpinner } from "@/components/ui/spinner";
@@ -27,6 +27,20 @@ export default function Menu() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+
+  const groups = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const catName = new Map(categories.map((c) => [c.id, c.name.toLowerCase()]));
+    const matches = (i: Item) =>
+      q === "" ||
+      i.name.toLowerCase().includes(q) ||
+      (catName.get(i.categoryId) ?? "").includes(q);
+
+    return categories
+      .map((cat) => ({ cat, catItems: items.filter((i) => i.categoryId === cat.id && matches(i)) }))
+      .filter(({ catItems }) => catItems.length > 0);
+  }, [categories, items, query]);
 
   useEffect(() => {
     Promise.all([api.listCategories(), api.listItems()])
@@ -74,7 +88,27 @@ export default function Menu() {
 
   return (
     <div className="mx-auto max-w-4xl p-4 sm:p-6 lg:p-8">
-      <div className="mb-6 flex items-center justify-between gap-3">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div className="relative flex-1 basis-full sm:basis-64 sm:max-w-sm">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search items or categories…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="pl-9 pr-9"
+            aria-label="Search menu"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          )}
+        </div>
         <p className="text-sm text-muted-foreground">
           {items.length} item{items.length === 1 ? "" : "s"} across {categories.length}{" "}
           categor{categories.length === 1 ? "y" : "ies"}
@@ -91,10 +125,7 @@ export default function Menu() {
         />
       </div>
 
-      {categories
-        .map((cat) => ({ cat, catItems: items.filter((i) => i.categoryId === cat.id) }))
-        .filter(({ catItems }) => catItems.length > 0)
-        .map(({ cat, catItems }) => (
+      {groups.map(({ cat, catItems }) => (
           <section key={cat.id} className="mb-8">
             <h2 className="mb-2 text-lg font-medium">
               {cat.name}{" "}
@@ -168,6 +199,15 @@ export default function Menu() {
             </ul>
           </section>
         ))}
+
+      {groups.length === 0 && query.trim() !== "" && (
+        <div className="rounded-lg border border-border bg-card px-4 py-10 text-center">
+          <p className="text-muted-foreground">No items match “{query}”.</p>
+          <Button variant="outline" className="mt-3" onClick={() => setQuery("")}>
+            Clear search
+          </Button>
+        </div>
+      )}
 
       <p className="mt-8 text-sm text-muted-foreground">
         Toggling “Sold out” pushes live to every display showing this item.
