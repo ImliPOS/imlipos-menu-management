@@ -5,6 +5,7 @@ import type {
   MenuCategoryView,
   ResolvedZone,
 } from "@imlipos/contracts";
+import { DEFAULT_THEME } from "@imlipos/contracts";
 import { db, schema } from "../db/client.js";
 
 const { categories, items, screenCategories } = schema;
@@ -80,6 +81,7 @@ export async function buildDeviceContent(
       orientation,
       fontSize: "medium",
       sliding: true,
+      theme: DEFAULT_THEME,
       version,
     };
   }
@@ -117,6 +119,7 @@ export async function buildDeviceContent(
     orientation,
     fontSize: layout.fontSize ?? "medium",
     sliding: layout.sliding ?? true,
+    theme: { ...DEFAULT_THEME, ...layout.theme },
     version,
   };
 }

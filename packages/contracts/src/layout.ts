@@ -65,9 +65,34 @@ export function resolveFontScale(f: MenuFont = MENU_SCALE_DEFAULT): number {
   return Math.min(MENU_SCALE_MAX, Math.max(MENU_SCALE_MIN, n));
 }
 
+/** Per-display colour theme. `text` drives item names/prices; `heading` keeps
+ *  the category-title accent separate so a light background can't hide it.
+ *  Values are CSS colour strings (hex from the editor's colour pickers). */
+export const layoutTheme = z.object({
+  background: z.string().default("#000000"),
+  text: z.string().default("#ffffff"),
+  heading: z.string().default("#ffd700"),
+  /** The line drawn between adjacent menu blocks. */
+  divider: z.string().default("#52525b"),
+});
+export type LayoutTheme = z.infer<typeof layoutTheme>;
+
+/** The default menu palette: black background, white item text, gold headings,
+ *  grey separator lines. Used as the schema default and the editor's
+ *  "Reset colors" target. */
+export const DEFAULT_THEME: LayoutTheme = {
+  background: "#000000",
+  text: "#ffffff",
+  heading: "#ffd700",
+  divider: "#52525b",
+};
+
 export const deviceLayout = z.object({
   template: z.string(),
   zones: z.array(layoutZone),
+  /** Per-display colour theme (background / item text / category heading).
+   *  Older layouts without a theme fall back to DEFAULT_THEME. */
+  theme: layoutTheme.default(DEFAULT_THEME),
   /** Per-display menu font scale (1 = original). Accepts a legacy preset string
    *  too; resolveFontScale() normalises either to a number. */
   fontSize: menuFont.default(MENU_SCALE_DEFAULT),
@@ -118,6 +143,8 @@ export const deviceContent = z.object({
   /** When true, overflowing menu blocks cycle their items; when false they are
    *  rendered statically (the editor guarantees they fit before saving). */
   sliding: z.boolean().default(true),
+  /** Per-display colour theme (background / item text / category heading). */
+  theme: layoutTheme.default(DEFAULT_THEME),
   version: z.number().int(),
 });
 export type DeviceContent = z.infer<typeof deviceContent>;
