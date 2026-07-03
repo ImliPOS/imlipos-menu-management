@@ -18,6 +18,7 @@ import * as ScreenOrientation from "expo-screen-orientation";
 import * as Updates from "expo-updates";
 import {
   continuationHeadingIds,
+  frameContentInset,
   MENU_BLOCK_PAD,
   menuStyle,
   paginateMenu,
@@ -40,6 +41,7 @@ import {
   reportResolution,
 } from "../lib/api";
 import { connectSocket, type TvSocket } from "../lib/socket";
+import { DisplayFrame } from "../components/DisplayFrame";
 import { clearDeviceContent, loadDeviceContent, saveDeviceContent } from "../db/cache";
 import { store } from "../lib/storage";
 import { sizedImage } from "../lib/image";
@@ -275,29 +277,47 @@ export function MenuScreen({
         </View>
       )}
       <View style={canvasStyle}>
-        {content.zones.map((z) => (
-          <View
-            key={z.id}
-            style={[
-              {
-                position: "absolute",
-                left: `${z.x}%`,
-                top: `${z.y}%`,
-                width: `${z.w}%`,
-                height: `${z.h}%`,
-              },
-              menuDivider(z, content.zones, theme.divider),
-            ]}
-          >
-            <Zone
-              zone={z}
-              fontSize={content.fontSize ?? "medium"}
-              sliding={content.sliding ?? true}
-              theme={theme}
-              hideHeadings={hideHeadings.get(z.id)}
-            />
-          </View>
-        ))}
+        {/* Zones live in an inset layer when a frame is active, so the frame's
+            band is clear of menu content (0dp inset → fills the canvas). */}
+        <View
+          style={{
+            position: "absolute",
+            top: frameContentInset(theme.frame ?? "none"),
+            left: frameContentInset(theme.frame ?? "none"),
+            right: frameContentInset(theme.frame ?? "none"),
+            bottom: frameContentInset(theme.frame ?? "none"),
+          }}
+        >
+          {content.zones.map((z) => (
+            <View
+              key={z.id}
+              style={[
+                {
+                  position: "absolute",
+                  left: `${z.x}%`,
+                  top: `${z.y}%`,
+                  width: `${z.w}%`,
+                  height: `${z.h}%`,
+                },
+                menuDivider(z, content.zones, theme.divider),
+              ]}
+            >
+              <Zone
+                zone={z}
+                fontSize={content.fontSize ?? "medium"}
+                sliding={content.sliding ?? true}
+                theme={theme}
+                hideHeadings={hideHeadings.get(z.id)}
+              />
+            </View>
+          ))}
+        </View>
+        {/* Decorative frame in the band around the inset zones. */}
+        <DisplayFrame
+          frame={theme.frame ?? "none"}
+          color={theme.heading}
+          background={theme.background}
+        />
       </View>
     </Pressable>
   );
