@@ -1,12 +1,12 @@
 /**
- * Seed ~320 menu items across ~16 categories into every shop (non-destructive —
+ * Seed ~400 menu items across ~20 categories into every shop (non-destructive —
  * existing categories/items are left untouched). Run:
  *   pnpm --filter @imlipos/api exec tsx src/db/seed.ts
  */
 import { db, schema } from "./client.js";
-import { sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
-// 16 categories x 20 items = 320 items per shop. [priceMin, priceMax] sets a
+// 20 categories x 20 items = 400 items per shop. [priceMin, priceMax] sets a
 // realistic range; each item's price is spread evenly across it.
 const MENU: Array<{ category: string; min: number; max: number; items: string[] }> = [
   {
@@ -201,6 +201,54 @@ const MENU: Array<{ category: string; min: number; max: number; items: string[] 
       "Watermelon Juice", "Orange Juice", "Pineapple Juice", "Mosambi Juice",
     ],
   },
+  {
+    category: "Salads",
+    min: 90,
+    max: 260,
+    items: [
+      "Green Salad", "Onion Salad", "Kachumber Salad", "Russian Salad",
+      "Greek Salad", "Caesar Salad", "Caesar Chicken Salad", "Sprout Salad",
+      "Corn Chaat Salad", "Fruit Salad", "Coleslaw", "Pasta Salad",
+      "Tandoori Paneer Salad", "Chickpea Salad", "Beetroot Walnut Salad", "Quinoa Salad",
+      "Thai Raw Papaya Salad", "Watermelon Feta Salad", "Grilled Veg Salad", "Mixed Sprout Chaat",
+    ],
+  },
+  {
+    category: "Continental & Pasta",
+    min: 180,
+    max: 420,
+    items: [
+      "Penne Alfredo", "Penne Arrabiata", "Spaghetti Aglio e Olio", "Mac & Cheese",
+      "Pink Sauce Pasta", "Chicken Alfredo Pasta", "Veg Au Gratin", "Chicken Au Gratin",
+      "Grilled Veg Steak", "Grilled Chicken Steak", "Veg Lasagna", "Chicken Lasagna",
+      "Veg Stroganoff", "Fish & Chips", "Peri Peri Fries", "Loaded Nachos",
+      "Veg Sizzler", "Chicken Sizzler", "Mushroom Risotto", "Herb Grilled Fish",
+    ],
+  },
+  {
+    category: "Momos & Dumplings",
+    min: 120,
+    max: 280,
+    items: [
+      "Veg Steamed Momos", "Veg Fried Momos", "Paneer Momos", "Corn Cheese Momos",
+      "Schezwan Veg Momos", "Tandoori Veg Momos", "Chicken Steamed Momos", "Chicken Fried Momos",
+      "Schezwan Chicken Momos", "Tandoori Chicken Momos", "Veg Kurkure Momos", "Chicken Kurkure Momos",
+      "Cheese Corn Momos", "Spinach Cheese Momos", "Peri Peri Veg Momos", "Peri Peri Chicken Momos",
+      "Chocolate Momos", "Veg Wonton", "Chicken Wonton", "Pan Fried Momos",
+    ],
+  },
+  {
+    category: "Egg Specials",
+    min: 90,
+    max: 260,
+    items: [
+      "Egg Bhurji", "Egg Masala", "Egg Roast", "Egg Ghotala",
+      "Egg Kejriwal", "Egg Podimas", "Masala Omelette", "Cheese Omelette",
+      "Spanish Omelette", "Plain Omelette", "Bull's Eye", "Half Fry",
+      "Double Egg Bhurji", "Egg Paratha", "Egg Toast", "Egg Maggi",
+      "Egg Manchurian Special", "Egg Fried Rice Special", "Egg Curry Special", "Boiled Eggs",
+    ],
+  },
 ];
 
 const SHOP_SORT_BASE = 100; // place new categories after any existing ones
@@ -211,26 +259,43 @@ function priceFor(min: number, max: number, i: number, n: number): string {
   return v.toFixed(2);
 }
 
-// Guard: refuse to seed unless the data is exactly 320 items / 16 categories.
-const perCat = MENU.map((m) => m.items.length);
-const total = perCat.reduce((a, b) => a + b, 0);
+// Guard: keep the 20-items-per-category invariant (prices spread evenly assume
+// it), but don't pin the category count so new categories can be added freely.
+const total = MENU.reduce((a, m) => a + m.items.length, 0);
 const bad = MENU.filter((m) => m.items.length !== 20).map((m) => m.category);
-if (MENU.length !== 16 || total !== 320 || bad.length) {
+if (bad.length) {
   console.error(
-    `Aborting: expected 16 categories x 20 = 320 items. Got ${MENU.length} categories, ${total} items.` +
-      (bad.length ? ` Categories not 20: ${bad.join(", ")}` : ""),
+    `Aborting: every category must have exactly 20 items. Not 20: ${bad.join(", ")}`,
   );
   process.exit(1);
 }
 
 const shops = await db.select({ id: schema.shops.id, name: schema.shops.name }).from(schema.shops);
-console.log(`Seeding ${MENU.length} categories x 20 items into ${shops.length} shops...\n`);
+console.log(
+  `Seeding ${MENU.length} categories (${total} items) into ${shops.length} shops...\n`,
+);
 
 let grandItems = 0;
+let grandCats = 0;
 for (const shop of shops) {
   let shopItems = 0;
+  let shopCats = 0;
   for (let c = 0; c < MENU.length; c++) {
     const def = MENU[c]!;
+    // Idempotent: skip a category this shop already has (by name), so re-running
+    // only adds newly-introduced categories instead of duplicating existing ones.
+    const existing = await db
+      .select({ id: schema.categories.id })
+      .from(schema.categories)
+      .where(
+        and(
+          eq(schema.categories.shopId, shop.id),
+          eq(schema.categories.name, def.category),
+        ),
+      )
+      .limit(1);
+    if (existing.length) continue;
+
     const [cat] = await db
       .insert(schema.categories)
       .values({
@@ -250,9 +315,13 @@ for (const shop of shops) {
     }));
     await db.insert(schema.items).values(rows);
     shopItems += rows.length;
+    shopCats += 1;
   }
   grandItems += shopItems;
-  console.log(`  ${shop.name}: +${MENU.length} categories, +${shopItems} items`);
+  grandCats += shopCats;
+  console.log(`  ${shop.name}: +${shopCats} categories, +${shopItems} items`);
 }
-console.log(`\nDone. Inserted ${grandItems} items total across ${shops.length} shops.`);
+console.log(
+  `\nDone. Inserted ${grandCats} categories / ${grandItems} items across ${shops.length} shops.`,
+);
 process.exit(0);
