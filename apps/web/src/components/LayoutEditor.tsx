@@ -17,6 +17,9 @@ import {
   DEFAULT_THEME,
   flowCategoriesAcrossZones,
   LAYOUT_TEMPLATES,
+  DISPLAY_FRAMES,
+  DISPLAY_FRAME_LABELS,
+  frameContentInset,
   MENU_BLOCK_PAD,
   MENU_SCALE_DEFAULT,
   MENU_SCALE_MAX,
@@ -30,6 +33,7 @@ import {
   zonesInReadingOrder,
   type Category,
   type Device,
+  type DisplayFrame as DisplayFrameId,
   type FlowCatalogCategory,
   type Item,
   type LayoutTheme,
@@ -41,6 +45,7 @@ import {
   type ZoneType,
 } from "@imlipos/contracts";
 import { api, uploadMedia } from "@/lib/api";
+import { DisplayFrame } from "@/components/DisplayFrame";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -208,6 +213,14 @@ export function LayoutEditorPanel({
   }, [zones.length, aspect]);
   const scale = canvasPx > 0 ? canvasPx / logicalW : 0;
 
+  // When a frame is active the menu content is pulled in by this many dp on each
+  // side so the decorative border has a clear band. Expressed as a %-per-axis for
+  // the render wrapper, and subtracted from the logical canvas the flow/fit math
+  // works against so the preview and TV agree on how much fits.
+  const frameInset = frameContentInset(theme.frame ?? "none");
+  const insetXPct = logicalW > 0 ? (frameInset / logicalW) * 100 : 0;
+  const insetYPct = logicalHeightDp > 0 ? (frameInset / logicalHeightDp) * 100 : 0;
+
   useEffect(() => {
     api.listCategories().then(setCategories).catch(console.error);
     api.listItems().then(setItems).catch(console.error);
@@ -341,13 +354,13 @@ export function LayoutEditorPanel({
   const flowedZones = useMemo(() => {
     if (!autoFlow || catalog.size === 0) return zones;
     return flowCategoriesAcrossZones(zones, {
-      logicalHeightDp,
-      logicalWidthDp: logicalW,
+      logicalHeightDp: Math.max(1, logicalHeightDp - frameInset * 2),
+      logicalWidthDp: Math.max(1, logicalW - frameInset * 2),
       fontSize: fontScale,
       catalog,
       hiddenItemIds: displayHidden,
     });
-  }, [autoFlow, zones, catalog, logicalHeightDp, logicalW, fontScale, displayHidden]);
+  }, [autoFlow, zones, catalog, logicalHeightDp, logicalW, fontScale, displayHidden, frameInset]);
 
   // Category ids whose heading is suppressed per block — a category that spills
   // across blocks prints its heading only in the first block it appears in.
@@ -709,7 +722,15 @@ export function LayoutEditorPanel({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => patchTheme(DEFAULT_THEME)}
+                // Reset the four colours only — the frame is a separate choice.
+                onClick={() =>
+                  patchTheme({
+                    background: DEFAULT_THEME.background,
+                    text: DEFAULT_THEME.text,
+                    heading: DEFAULT_THEME.heading,
+                    divider: DEFAULT_THEME.divider,
+                  })
+                }
               >
                 Reset colors
               </Button>
@@ -744,6 +765,27 @@ export function LayoutEditorPanel({
           <p className="text-xs text-muted-foreground">
             Colors apply to every menu block on this display and preview live below.
           </p>
+          <div className="space-y-2">
+            <Label htmlFor="frame">Frame</Label>
+            <select
+              id="frame"
+              className={field}
+              value={theme.frame ?? "none"}
+              onChange={(e) =>
+                patchTheme({ frame: e.target.value as DisplayFrameId })
+              }
+            >
+              {DISPLAY_FRAMES.map((f) => (
+                <option key={f} value={f}>
+                  {DISPLAY_FRAME_LABELS[f]}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              A decorative border drawn around the whole display, in your
+              category-heading colour. Preview updates live below.
+            </p>
+          </div>
         </div>
       )}
 
@@ -757,6 +799,17 @@ export function LayoutEditorPanel({
               className={`relative mt-2 w-full max-w-xl overflow-hidden rounded-lg border border-border ${previewFont.className}`}
               style={{ aspectRatio: String(aspect), backgroundColor: theme.background }}
             >
+              {/* Zones live in an inset layer when a frame is active, so the
+                  frame's band is clear of menu content. No frame → 0% inset. */}
+              <div
+                className="absolute"
+                style={{
+                  top: `${insetYPct}%`,
+                  left: `${insetXPct}%`,
+                  right: `${insetXPct}%`,
+                  bottom: `${insetYPct}%`,
+                }}
+              >
               {flowedZones.map((z) => (
                 <button
                   key={z.id}
@@ -789,12 +842,24 @@ export function LayoutEditorPanel({
                       warnOverflow={canOverflowWarn(z.id)}
                     />
                   ) : (
-                    <span className="flex h-full w-full items-center justify-center text-xs font-medium">
+                    // Empty block: paint an opaque neutral backdrop so the label
+                    // stays legible regardless of the chosen theme colours (which
+                    // only matter once the block actually shows content).
+                    <span className="flex h-full w-full items-center justify-center bg-card text-xs font-medium text-muted-foreground">
                       {z.type}
                     </span>
                   )}
                 </button>
               ))}
+              </div>
+              {/* Decorative frame sits in the band around the inset zones
+                  (click-through, drawn on the full canvas). */}
+              <DisplayFrame
+                frame={theme.frame ?? "none"}
+                color={theme.heading}
+                background={theme.background}
+                scale={scale}
+              />
             </div>
             {scale > 0 && (
               <p className="mt-2 text-xs text-muted-foreground">
