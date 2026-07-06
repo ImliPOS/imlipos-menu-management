@@ -795,6 +795,21 @@ export function LayoutEditorPanel({
           <p className="text-xs text-muted-foreground">
             Colors apply to every menu block on this display and preview live below.
           </p>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-3">
+              <Label htmlFor="dividers">Separator lines</Label>
+              <Switch
+                id="dividers"
+                checked={theme.dividerEnabled ?? true}
+                onCheckedChange={(dividerEnabled) => patchTheme({ dividerEnabled })}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {(theme.dividerEnabled ?? true)
+                ? "On — a line is drawn between menu blocks that sit next to each other."
+                : "Off — menu blocks run together with no line between them."}
+            </p>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="frame">Frame</Label>
             <select
@@ -1006,8 +1021,16 @@ export function LayoutEditorPanel({
                     width: `${z.w}%`,
                     height: `${z.h}%`,
                     // Menu blocks show the chosen separator-line colour (matches
-                    // the TV's divider); other zone types keep their type tint.
-                    ...(z.type === "menu" ? { borderColor: theme.divider } : {}),
+                    // the TV's divider) — or none when dividers are turned off;
+                    // other zone types keep their type tint.
+                    ...(z.type === "menu"
+                      ? {
+                          borderColor:
+                            (theme.dividerEnabled ?? true)
+                              ? theme.divider
+                              : "transparent",
+                        }
+                      : {}),
                   }}
                 >
                   {z.type === "menu" && z.categoryIds.length > 0 && scale > 0 ? (
