@@ -319,7 +319,9 @@ export function MenuScreen({
                   width: `${z.w}%`,
                   height: `${z.h}%`,
                 },
-                menuDivider(z, content.zones, theme.divider),
+                theme.dividerEnabled
+                  ? menuDivider(z, content.zones, theme.divider)
+                  : null,
               ]}
             >
               <Zone

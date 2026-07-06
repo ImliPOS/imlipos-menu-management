@@ -147,6 +147,8 @@ export const layoutTheme = z.object({
   heading: z.string().default("#ffd700"),
   /** The line drawn between adjacent menu blocks. */
   divider: z.string().default("#52525b"),
+  /** Draw the separator lines at all (colour is kept while off). */
+  dividerEnabled: z.boolean().default(true),
   /** Decorative border around the whole display (drawn in `heading`). */
   frame: displayFrame.default("none"),
 });
@@ -160,6 +162,7 @@ export const DEFAULT_THEME: LayoutTheme = {
   text: "#ffffff",
   heading: "#ffd700",
   divider: "#52525b",
+  dividerEnabled: true,
   frame: "none",
 };
 
