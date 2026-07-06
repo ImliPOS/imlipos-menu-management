@@ -421,7 +421,7 @@ function Zone({
 // clear divider on a menu zone's right/bottom edge when the block touching it
 // there is *also* a menu. Each shared edge is "owned" by the left/top zone, so
 // the line is drawn exactly once (never against image/video blocks).
-const DIVIDER_W = 2;
+const DIVIDER_W = 1;
 function menuDivider(
   zone: ResolvedZone,
   zones: ResolvedZone[],
