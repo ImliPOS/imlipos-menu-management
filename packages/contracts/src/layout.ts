@@ -91,6 +91,43 @@ export const DISPLAY_FRAME_LABELS: Record<DisplayFrame, string> = {
   decoCorners: "Deco corners",
 };
 
+/** ---- Logo watermark ----
+ *  The shop's logo drawn once, centred behind the menu text, at an
+ *  operator-chosen opacity. Only available when EVERY block on the display is a
+ *  menu block (see watermarkEligible) — media blocks paint over the canvas, so a
+ *  watermark behind them would show through partially and look broken. */
+export const WATERMARK_OPACITY_MIN = 5;
+export const WATERMARK_OPACITY_MAX = 100;
+export const WATERMARK_OPACITY_DEFAULT = 15;
+/** The watermark's bounding box, as a % of each canvas axis; the logo is
+ *  contain-fitted inside it, centred. Shared by the web preview and the TV so
+ *  both draw the logo the same size. */
+export const WATERMARK_SIZE_PCT = 60;
+
+export const layoutWatermark = z.object({
+  enabled: z.boolean().default(false),
+  /** Uploaded logo image (Supabase Storage public URL). */
+  url: z.string().url().nullable().default(null),
+  /** Logo opacity in percent (100 = solid, lower = more transparent). */
+  opacity: z
+    .number()
+    .min(WATERMARK_OPACITY_MIN)
+    .max(WATERMARK_OPACITY_MAX)
+    .default(WATERMARK_OPACITY_DEFAULT),
+});
+export type LayoutWatermark = z.infer<typeof layoutWatermark>;
+
+export const DEFAULT_WATERMARK: LayoutWatermark = {
+  enabled: false,
+  url: null,
+  opacity: WATERMARK_OPACITY_DEFAULT,
+};
+
+/** A watermark may only show when the whole display is menu blocks. */
+export function watermarkEligible(zones: Array<{ type: ZoneType }>): boolean {
+  return zones.length > 0 && zones.every((z) => z.type === "menu");
+}
+
 /** Per-display colour theme. `text` drives item names/prices; `heading` keeps
  *  the category-title accent separate so a light background can't hide it.
  *  Values are CSS colour strings (hex from the editor's colour pickers). */
@@ -254,6 +291,10 @@ export const deviceLayout = z.object({
    *  flowCategoriesAcrossZones(). When false, every block keeps exactly its own
    *  assigned items (the original manual model). */
   autoFlow: z.boolean().default(true),
+  /** Shop-logo watermark behind the menu. Stored even when the layout later
+   *  stops being all-menu (so the choice survives template switches), but only
+   *  RENDERED when watermarkEligible(zones) — enforced by deviceContent. */
+  watermark: layoutWatermark.default(DEFAULT_WATERMARK),
 });
 export type DeviceLayout = z.infer<typeof deviceLayout>;
 
@@ -294,6 +335,12 @@ export const deviceContent = z.object({
   sliding: z.boolean().default(true),
   /** Per-display colour theme (background / item text / category heading). */
   theme: layoutTheme.default(DEFAULT_THEME),
+  /** Resolved logo watermark — present only when the operator enabled it, a
+   *  logo is uploaded AND every zone is a menu block; null otherwise. */
+  watermark: z
+    .object({ url: z.string().url(), opacity: z.number() })
+    .nullable()
+    .default(null),
   version: z.number().int(),
 });
 export type DeviceContent = z.infer<typeof deviceContent>;

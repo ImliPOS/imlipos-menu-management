@@ -22,6 +22,7 @@ import {
   MENU_BLOCK_PAD,
   menuStyle,
   paginateMenu,
+  WATERMARK_SIZE_PCT,
 } from "@imlipos/contracts";
 import { DEFAULT_THEME } from "@imlipos/contracts";
 import type {
@@ -277,6 +278,22 @@ export function MenuScreen({
         </View>
       )}
       <View style={canvasStyle}>
+        {/* Shop-logo watermark, centred behind every menu block. Rendered before
+            the zones so the menu text paints over it; the API only sends it when
+            the whole display is menu blocks (menu zones have no background). */}
+        {content.watermark && (
+          <View pointerEvents="none" style={styles.watermarkWrap}>
+            <Image
+              source={{ uri: sizedImage(content.watermark.url, 960) }}
+              style={[
+                styles.watermarkImg,
+                { opacity: content.watermark.opacity / 100 },
+              ]}
+              contentFit="contain"
+              cachePolicy="memory-disk"
+            />
+          </View>
+        )}
         {/* Zones live in an inset layer when a frame is active, so the frame's
             band is clear of menu content (0dp inset → fills the canvas). */}
         <View
@@ -693,4 +710,20 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   offlineText: { color: "#fff", textAlign: "center", fontSize: 18 },
+
+  // Logo watermark: a centred bounding box the logo is contain-fitted into,
+  // drawn under the (background-free) menu zones.
+  watermarkWrap: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  watermarkImg: {
+    width: `${WATERMARK_SIZE_PCT}%`,
+    height: `${WATERMARK_SIZE_PCT}%`,
+  },
 });

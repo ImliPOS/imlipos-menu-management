@@ -15,12 +15,17 @@ const previewFont = Roboto({
 import {
   continuationHeadingIds,
   DEFAULT_THEME,
+  DEFAULT_WATERMARK,
   flowCategoriesAcrossZones,
   LAYOUT_TEMPLATES,
   DISPLAY_FRAMES,
   DISPLAY_FRAME_LABELS,
   frameContentInset,
   MENU_BLOCK_PAD,
+  WATERMARK_OPACITY_MAX,
+  WATERMARK_OPACITY_MIN,
+  WATERMARK_SIZE_PCT,
+  watermarkEligible,
   MENU_SCALE_DEFAULT,
   MENU_SCALE_MAX,
   MENU_SCALE_MIN,
@@ -37,6 +42,7 @@ import {
   type FlowCatalogCategory,
   type Item,
   type LayoutTheme,
+  type LayoutWatermark,
   type LayoutZone,
   type MenuFont,
   type MenuPageCategory,
@@ -137,6 +143,17 @@ export function LayoutEditorPanel({
     setTheme((t) => ({ ...t, ...patch }));
     setSaved(false);
   };
+  // Shop-logo watermark behind the menu. The choice is kept even when the
+  // layout isn't eligible (all-menu) so switching templates doesn't lose it —
+  // it just doesn't render (preview, API and TV all apply the same rule).
+  const [watermark, setWatermark] = useState<LayoutWatermark>(() => ({
+    ...DEFAULT_WATERMARK,
+    ...device.layout?.watermark,
+  }));
+  const patchWatermark = (patch: Partial<LayoutWatermark>) => {
+    setWatermark((w) => ({ ...w, ...patch }));
+    setSaved(false);
+  };
   // When on, a category that overflows its block spills into the following
   // empty/continuation blocks automatically (see flowCategoriesAcrossZones).
   const [autoFlow, setAutoFlow] = useState(initialAutoFlow);
@@ -220,6 +237,11 @@ export function LayoutEditorPanel({
   const frameInset = frameContentInset(theme.frame ?? "none");
   const insetXPct = logicalW > 0 ? (frameInset / logicalW) * 100 : 0;
   const insetYPct = logicalHeightDp > 0 ? (frameInset / logicalHeightDp) * 100 : 0;
+
+  // Watermark is only allowed when EVERY block on the display is a menu block —
+  // the same rule the API re-checks before sending it to the TV.
+  const wmEligible = watermarkEligible(zones);
+  const wmVisible = wmEligible && watermark.enabled && !!watermark.url;
 
   useEffect(() => {
     api.listCategories().then(setCategories).catch(console.error);
@@ -521,6 +543,11 @@ export function LayoutEditorPanel({
     patchZone(zoneId, { mediaUrl: url });
   }
 
+  async function uploadWatermarkLogo(file: File) {
+    const url = await uploadMedia(file);
+    patchWatermark({ url });
+  }
+
   async function save() {
     setBusy(true);
     setSaved(false);
@@ -534,6 +561,7 @@ export function LayoutEditorPanel({
         sliding,
         autoFlow,
         theme,
+        watermark,
       });
       setSaved(true);
       onSaved?.();
@@ -786,6 +814,97 @@ export function LayoutEditorPanel({
               category-heading colour. Preview updates live below.
             </p>
           </div>
+
+          {/* Shop-logo watermark — only when the whole display is menu blocks. */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <Label htmlFor="watermark">Logo watermark</Label>
+              <Switch
+                id="watermark"
+                checked={watermark.enabled}
+                disabled={!wmEligible}
+                onCheckedChange={(enabled) => patchWatermark({ enabled })}
+              />
+            </div>
+            {!wmEligible ? (
+              <p className="text-xs text-muted-foreground">
+                Available only when every block on this display shows the menu.
+                {watermark.enabled &&
+                  " Your watermark is kept but won’t show until then."}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Shows your logo faintly behind the menu, centred on the display.
+              </p>
+            )}
+            {watermark.enabled && wmEligible && (
+              <div className="space-y-3 rounded-lg border border-border p-3">
+                <div className="flex items-center gap-3">
+                  {watermark.url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={watermark.url}
+                      alt="Logo"
+                      className="h-16 w-16 rounded-md border border-border bg-background object-contain p-1"
+                    />
+                  ) : (
+                    <div className="flex h-16 w-16 items-center justify-center rounded-md border border-dashed border-border text-[10px] text-muted-foreground">
+                      No logo
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm hover:bg-secondary/60">
+                      <UploadCloud className="size-4" />
+                      {watermark.url ? "Replace logo" : "Upload logo"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          e.currentTarget.value = "";
+                          if (f)
+                            uploadWatermarkLogo(f).catch((err) =>
+                              alert(err.message),
+                            );
+                        }}
+                      />
+                    </label>
+                    {watermark.url && (
+                      <button
+                        type="button"
+                        onClick={() => patchWatermark({ url: null })}
+                        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-red-400"
+                      >
+                        <X className="size-4" /> Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="wm-opacity">
+                    Transparency — logo at {watermark.opacity}% opacity
+                  </Label>
+                  <input
+                    id="wm-opacity"
+                    type="range"
+                    min={WATERMARK_OPACITY_MIN}
+                    max={WATERMARK_OPACITY_MAX}
+                    step={1}
+                    value={watermark.opacity}
+                    onChange={(e) =>
+                      patchWatermark({ opacity: Number(e.target.value) })
+                    }
+                    className="w-full max-w-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Lower % is more transparent; 100% shows the logo solid.
+                    Preview updates live below.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -799,6 +918,23 @@ export function LayoutEditorPanel({
               className={`relative mt-2 w-full max-w-xl overflow-hidden rounded-lg border border-border ${previewFont.className}`}
               style={{ aspectRatio: String(aspect), backgroundColor: theme.background }}
             >
+              {/* Logo watermark under the menu blocks (they go transparent when
+                  it's visible, so the logo shows through behind the text). */}
+              {wmVisible && watermark.url && (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={watermark.url}
+                    alt=""
+                    className="object-contain"
+                    style={{
+                      width: `${WATERMARK_SIZE_PCT}%`,
+                      height: `${WATERMARK_SIZE_PCT}%`,
+                      opacity: watermark.opacity / 100,
+                    }}
+                  />
+                </div>
+              )}
               {/* Zones live in an inset layer when a frame is active, so the
                   frame's band is clear of menu content. No frame → 0% inset. */}
               <div
@@ -840,6 +976,7 @@ export function LayoutEditorPanel({
                       onOverflow={reportOverflow}
                       hideHeadings={headingHideByZone.get(z.id)}
                       warnOverflow={canOverflowWarn(z.id)}
+                      transparent={wmVisible}
                     />
                   ) : (
                     // Empty block: paint an opaque neutral backdrop so the label
@@ -1276,6 +1413,7 @@ function MenuBlock({
   onOverflow,
   hideHeadings,
   warnOverflow,
+  transparent = false,
 }: {
   zone: LayoutZone;
   scale: number;
@@ -1290,6 +1428,9 @@ function MenuBlock({
   /** Whether a "Does not fit" badge may show here. With auto-flow on, only the
    *  last block warns — earlier blocks flow their overflow onward. */
   warnOverflow: boolean;
+  /** Skip painting the block background so the watermark under the canvas shows
+   *  through (the canvas itself already carries theme.background). */
+  transparent?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [blockPx, setBlockPx] = useState(0);
@@ -1382,7 +1523,7 @@ function MenuBlock({
     <div
       ref={ref}
       className="absolute inset-0 overflow-hidden text-left"
-      style={{ backgroundColor: theme.background }}
+      style={{ backgroundColor: transparent ? "transparent" : theme.background }}
     >
       <div
         className="flex h-full w-full flex-col"
