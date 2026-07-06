@@ -15,9 +15,19 @@ const previewFont = Roboto({
 import {
   continuationHeadingIds,
   DEFAULT_THEME,
+  DEFAULT_WATERMARK,
   flowCategoriesAcrossZones,
   LAYOUT_TEMPLATES,
+  DISPLAY_FRAMES,
+  DISPLAY_FRAME_LABELS,
+  frameContentInset,
   MENU_BLOCK_PAD,
+  WATERMARK_OPACITY_MAX,
+  WATERMARK_OPACITY_MIN,
+  WATERMARK_SIZE_MAX,
+  WATERMARK_SIZE_MIN,
+  WATERMARK_SIZE_STEP,
+  watermarkEligible,
   MENU_SCALE_DEFAULT,
   MENU_SCALE_MAX,
   MENU_SCALE_MIN,
@@ -30,9 +40,11 @@ import {
   zonesInReadingOrder,
   type Category,
   type Device,
+  type DisplayFrame as DisplayFrameId,
   type FlowCatalogCategory,
   type Item,
   type LayoutTheme,
+  type LayoutWatermark,
   type LayoutZone,
   type MenuFont,
   type MenuPageCategory,
@@ -41,6 +53,7 @@ import {
   type ZoneType,
 } from "@imlipos/contracts";
 import { api, uploadMedia } from "@/lib/api";
+import { DisplayFrame } from "@/components/DisplayFrame";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -132,6 +145,17 @@ export function LayoutEditorPanel({
     setTheme((t) => ({ ...t, ...patch }));
     setSaved(false);
   };
+  // Shop-logo watermark behind the menu. The choice is kept even when the
+  // layout isn't eligible (all-menu) so switching templates doesn't lose it —
+  // it just doesn't render (preview, API and TV all apply the same rule).
+  const [watermark, setWatermark] = useState<LayoutWatermark>(() => ({
+    ...DEFAULT_WATERMARK,
+    ...device.layout?.watermark,
+  }));
+  const patchWatermark = (patch: Partial<LayoutWatermark>) => {
+    setWatermark((w) => ({ ...w, ...patch }));
+    setSaved(false);
+  };
   // When on, a category that overflows its block spills into the following
   // empty/continuation blocks automatically (see flowCategoriesAcrossZones).
   const [autoFlow, setAutoFlow] = useState(initialAutoFlow);
@@ -207,6 +231,19 @@ export function LayoutEditorPanel({
     return () => ro.disconnect();
   }, [zones.length, aspect]);
   const scale = canvasPx > 0 ? canvasPx / logicalW : 0;
+
+  // When a frame is active the menu content is pulled in by this many dp on each
+  // side so the decorative border has a clear band. Expressed as a %-per-axis for
+  // the render wrapper, and subtracted from the logical canvas the flow/fit math
+  // works against so the preview and TV agree on how much fits.
+  const frameInset = frameContentInset(theme.frame ?? "none");
+  const insetXPct = logicalW > 0 ? (frameInset / logicalW) * 100 : 0;
+  const insetYPct = logicalHeightDp > 0 ? (frameInset / logicalHeightDp) * 100 : 0;
+
+  // Watermark is only allowed when EVERY block on the display is a menu block —
+  // the same rule the API re-checks before sending it to the TV.
+  const wmEligible = watermarkEligible(zones);
+  const wmVisible = wmEligible && watermark.enabled && !!watermark.url;
 
   useEffect(() => {
     api.listCategories().then(setCategories).catch(console.error);
@@ -341,13 +378,13 @@ export function LayoutEditorPanel({
   const flowedZones = useMemo(() => {
     if (!autoFlow || catalog.size === 0) return zones;
     return flowCategoriesAcrossZones(zones, {
-      logicalHeightDp,
-      logicalWidthDp: logicalW,
+      logicalHeightDp: Math.max(1, logicalHeightDp - frameInset * 2),
+      logicalWidthDp: Math.max(1, logicalW - frameInset * 2),
       fontSize: fontScale,
       catalog,
       hiddenItemIds: displayHidden,
     });
-  }, [autoFlow, zones, catalog, logicalHeightDp, logicalW, fontScale, displayHidden]);
+  }, [autoFlow, zones, catalog, logicalHeightDp, logicalW, fontScale, displayHidden, frameInset]);
 
   // Category ids whose heading is suppressed per block — a category that spills
   // across blocks prints its heading only in the first block it appears in.
@@ -508,6 +545,11 @@ export function LayoutEditorPanel({
     patchZone(zoneId, { mediaUrl: url });
   }
 
+  async function uploadWatermarkLogo(file: File) {
+    const url = await uploadMedia(file);
+    patchWatermark({ url });
+  }
+
   async function save() {
     setBusy(true);
     setSaved(false);
@@ -521,6 +563,7 @@ export function LayoutEditorPanel({
         sliding,
         autoFlow,
         theme,
+        watermark,
       });
       setSaved(true);
       onSaved?.();
@@ -709,7 +752,15 @@ export function LayoutEditorPanel({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => patchTheme(DEFAULT_THEME)}
+                // Reset the four colours only — the frame is a separate choice.
+                onClick={() =>
+                  patchTheme({
+                    background: DEFAULT_THEME.background,
+                    text: DEFAULT_THEME.text,
+                    heading: DEFAULT_THEME.heading,
+                    divider: DEFAULT_THEME.divider,
+                  })
+                }
               >
                 Reset colors
               </Button>
@@ -744,6 +795,177 @@ export function LayoutEditorPanel({
           <p className="text-xs text-muted-foreground">
             Colors apply to every menu block on this display and preview live below.
           </p>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-3">
+              <Label htmlFor="dividers">Separator lines</Label>
+              <Switch
+                id="dividers"
+                checked={theme.dividerEnabled ?? true}
+                onCheckedChange={(dividerEnabled) => patchTheme({ dividerEnabled })}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {(theme.dividerEnabled ?? true)
+                ? "On — a line is drawn between menu blocks that sit next to each other."
+                : "Off — menu blocks run together with no line between them."}
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="frame">Frame</Label>
+            <select
+              id="frame"
+              className={field}
+              value={theme.frame ?? "none"}
+              onChange={(e) =>
+                patchTheme({ frame: e.target.value as DisplayFrameId })
+              }
+            >
+              {DISPLAY_FRAMES.map((f) => (
+                <option key={f} value={f}>
+                  {DISPLAY_FRAME_LABELS[f]}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              A decorative border drawn around the whole display, in your
+              category-heading colour. Preview updates live below.
+            </p>
+          </div>
+
+          {/* Shop-logo watermark — only when the whole display is menu blocks. */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <Label htmlFor="watermark">Logo watermark</Label>
+              <Switch
+                id="watermark"
+                checked={watermark.enabled}
+                disabled={!wmEligible}
+                onCheckedChange={(enabled) => patchWatermark({ enabled })}
+              />
+            </div>
+            {!wmEligible ? (
+              <p className="text-xs text-muted-foreground">
+                Available only when every block on this display shows the menu.
+                {watermark.enabled &&
+                  " Your watermark is kept but won’t show until then."}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Shows your logo faintly behind the menu, centred on the display.
+              </p>
+            )}
+            {watermark.enabled && wmEligible && (
+              <div className="space-y-3 rounded-lg border border-border p-3">
+                <div className="flex items-center gap-3">
+                  {watermark.url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={watermark.url}
+                      alt="Logo"
+                      className="h-16 w-16 rounded-md border border-border bg-background object-contain p-1"
+                    />
+                  ) : (
+                    <div className="flex h-16 w-16 items-center justify-center rounded-md border border-dashed border-border text-[10px] text-muted-foreground">
+                      No logo
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm hover:bg-secondary/60">
+                      <UploadCloud className="size-4" />
+                      {watermark.url ? "Replace logo" : "Upload logo"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          e.currentTarget.value = "";
+                          if (f)
+                            uploadWatermarkLogo(f).catch((err) =>
+                              alert(err.message),
+                            );
+                        }}
+                      />
+                    </label>
+                    {watermark.url && (
+                      <button
+                        type="button"
+                        onClick={() => patchWatermark({ url: null })}
+                        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-red-400"
+                      >
+                        <X className="size-4" /> Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="wm-opacity">
+                    Transparency — logo at {watermark.opacity}% opacity
+                  </Label>
+                  <input
+                    id="wm-opacity"
+                    type="range"
+                    min={WATERMARK_OPACITY_MIN}
+                    max={WATERMARK_OPACITY_MAX}
+                    step={1}
+                    value={watermark.opacity}
+                    onChange={(e) =>
+                      patchWatermark({ opacity: Number(e.target.value) })
+                    }
+                    className="w-full max-w-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Lower % is more transparent; 100% shows the logo solid.
+                    Preview updates live below.
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label>Size</Label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      aria-label="Decrease watermark size"
+                      onClick={() =>
+                        patchWatermark({
+                          size: Math.max(
+                            WATERMARK_SIZE_MIN,
+                            watermark.size - WATERMARK_SIZE_STEP,
+                          ),
+                        })
+                      }
+                      disabled={watermark.size <= WATERMARK_SIZE_MIN}
+                      className="flex h-9 w-9 items-center justify-center rounded-md border border-input bg-background text-lg leading-none hover:bg-secondary/60 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      −
+                    </button>
+                    <span className="w-12 text-center text-sm tabular-nums">
+                      {watermark.size}%
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Increase watermark size"
+                      onClick={() =>
+                        patchWatermark({
+                          size: Math.min(
+                            WATERMARK_SIZE_MAX,
+                            watermark.size + WATERMARK_SIZE_STEP,
+                          ),
+                        })
+                      }
+                      disabled={watermark.size >= WATERMARK_SIZE_MAX}
+                      className="flex h-9 w-9 items-center justify-center rounded-md border border-input bg-background text-lg leading-none hover:bg-secondary/60 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    How much of the display the logo covers, centred (100% fills
+                    it edge to edge).
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -757,6 +979,34 @@ export function LayoutEditorPanel({
               className={`relative mt-2 w-full max-w-xl overflow-hidden rounded-lg border border-border ${previewFont.className}`}
               style={{ aspectRatio: String(aspect), backgroundColor: theme.background }}
             >
+              {/* Logo watermark under the menu blocks (they go transparent when
+                  it's visible, so the logo shows through behind the text). */}
+              {wmVisible && watermark.url && (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={watermark.url}
+                    alt=""
+                    className="object-contain"
+                    style={{
+                      width: `${watermark.size}%`,
+                      height: `${watermark.size}%`,
+                      opacity: watermark.opacity / 100,
+                    }}
+                  />
+                </div>
+              )}
+              {/* Zones live in an inset layer when a frame is active, so the
+                  frame's band is clear of menu content. No frame → 0% inset. */}
+              <div
+                className="absolute"
+                style={{
+                  top: `${insetYPct}%`,
+                  left: `${insetXPct}%`,
+                  right: `${insetXPct}%`,
+                  bottom: `${insetYPct}%`,
+                }}
+              >
               {flowedZones.map((z) => (
                 <button
                   key={z.id}
@@ -771,8 +1021,16 @@ export function LayoutEditorPanel({
                     width: `${z.w}%`,
                     height: `${z.h}%`,
                     // Menu blocks show the chosen separator-line colour (matches
-                    // the TV's divider); other zone types keep their type tint.
-                    ...(z.type === "menu" ? { borderColor: theme.divider } : {}),
+                    // the TV's divider) — or none when dividers are turned off;
+                    // other zone types keep their type tint.
+                    ...(z.type === "menu"
+                      ? {
+                          borderColor:
+                            (theme.dividerEnabled ?? true)
+                              ? theme.divider
+                              : "transparent",
+                        }
+                      : {}),
                   }}
                 >
                   {z.type === "menu" && z.categoryIds.length > 0 && scale > 0 ? (
@@ -787,14 +1045,27 @@ export function LayoutEditorPanel({
                       onOverflow={reportOverflow}
                       hideHeadings={headingHideByZone.get(z.id)}
                       warnOverflow={canOverflowWarn(z.id)}
+                      transparent={wmVisible}
                     />
                   ) : (
-                    <span className="flex h-full w-full items-center justify-center text-xs font-medium">
+                    // Empty block: paint an opaque neutral backdrop so the label
+                    // stays legible regardless of the chosen theme colours (which
+                    // only matter once the block actually shows content).
+                    <span className="flex h-full w-full items-center justify-center bg-card text-xs font-medium text-muted-foreground">
                       {z.type}
                     </span>
                   )}
                 </button>
               ))}
+              </div>
+              {/* Decorative frame sits in the band around the inset zones
+                  (click-through, drawn on the full canvas). */}
+              <DisplayFrame
+                frame={theme.frame ?? "none"}
+                color={theme.heading}
+                background={theme.background}
+                scale={scale}
+              />
             </div>
             {scale > 0 && (
               <p className="mt-2 text-xs text-muted-foreground">
@@ -1211,6 +1482,7 @@ function MenuBlock({
   onOverflow,
   hideHeadings,
   warnOverflow,
+  transparent = false,
 }: {
   zone: LayoutZone;
   scale: number;
@@ -1225,6 +1497,9 @@ function MenuBlock({
   /** Whether a "Does not fit" badge may show here. With auto-flow on, only the
    *  last block warns — earlier blocks flow their overflow onward. */
   warnOverflow: boolean;
+  /** Skip painting the block background so the watermark under the canvas shows
+   *  through (the canvas itself already carries theme.background). */
+  transparent?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [blockPx, setBlockPx] = useState(0);
@@ -1317,7 +1592,7 @@ function MenuBlock({
     <div
       ref={ref}
       className="absolute inset-0 overflow-hidden text-left"
-      style={{ backgroundColor: theme.background }}
+      style={{ backgroundColor: transparent ? "transparent" : theme.background }}
     >
       <div
         className="flex h-full w-full flex-col"

@@ -18,9 +18,11 @@ import * as ScreenOrientation from "expo-screen-orientation";
 import * as Updates from "expo-updates";
 import {
   continuationHeadingIds,
+  frameContentInset,
   MENU_BLOCK_PAD,
   menuStyle,
   paginateMenu,
+  WATERMARK_SIZE_DEFAULT,
 } from "@imlipos/contracts";
 import { DEFAULT_THEME } from "@imlipos/contracts";
 import type {
@@ -40,6 +42,7 @@ import {
   reportResolution,
 } from "../lib/api";
 import { connectSocket, type TvSocket } from "../lib/socket";
+import { DisplayFrame } from "../components/DisplayFrame";
 import { clearDeviceContent, loadDeviceContent, saveDeviceContent } from "../db/cache";
 import { store } from "../lib/storage";
 import { sizedImage } from "../lib/image";
@@ -275,29 +278,68 @@ export function MenuScreen({
         </View>
       )}
       <View style={canvasStyle}>
-        {content.zones.map((z) => (
-          <View
-            key={z.id}
-            style={[
-              {
-                position: "absolute",
-                left: `${z.x}%`,
-                top: `${z.y}%`,
-                width: `${z.w}%`,
-                height: `${z.h}%`,
-              },
-              menuDivider(z, content.zones, theme.divider),
-            ]}
-          >
-            <Zone
-              zone={z}
-              fontSize={content.fontSize ?? "medium"}
-              sliding={content.sliding ?? true}
-              theme={theme}
-              hideHeadings={hideHeadings.get(z.id)}
+        {/* Shop-logo watermark, centred behind every menu block. Rendered before
+            the zones so the menu text paints over it; the API only sends it when
+            the whole display is menu blocks (menu zones have no background). */}
+        {content.watermark && (
+          <View pointerEvents="none" style={styles.watermarkWrap}>
+            <Image
+              source={{ uri: sizedImage(content.watermark.url, 960) }}
+              style={{
+                // Old cached snapshots predate the size control — keep the
+                // original fixed size until fresh content arrives.
+                width: `${content.watermark.size ?? WATERMARK_SIZE_DEFAULT}%`,
+                height: `${content.watermark.size ?? WATERMARK_SIZE_DEFAULT}%`,
+                opacity: content.watermark.opacity / 100,
+              }}
+              contentFit="contain"
+              cachePolicy="memory-disk"
             />
           </View>
-        ))}
+        )}
+        {/* Zones live in an inset layer when a frame is active, so the frame's
+            band is clear of menu content (0dp inset → fills the canvas). */}
+        <View
+          style={{
+            position: "absolute",
+            top: frameContentInset(theme.frame ?? "none"),
+            left: frameContentInset(theme.frame ?? "none"),
+            right: frameContentInset(theme.frame ?? "none"),
+            bottom: frameContentInset(theme.frame ?? "none"),
+          }}
+        >
+          {content.zones.map((z) => (
+            <View
+              key={z.id}
+              style={[
+                {
+                  position: "absolute",
+                  left: `${z.x}%`,
+                  top: `${z.y}%`,
+                  width: `${z.w}%`,
+                  height: `${z.h}%`,
+                },
+                theme.dividerEnabled
+                  ? menuDivider(z, content.zones, theme.divider)
+                  : null,
+              ]}
+            >
+              <Zone
+                zone={z}
+                fontSize={content.fontSize ?? "medium"}
+                sliding={content.sliding ?? true}
+                theme={theme}
+                hideHeadings={hideHeadings.get(z.id)}
+              />
+            </View>
+          ))}
+        </View>
+        {/* Decorative frame in the band around the inset zones. */}
+        <DisplayFrame
+          frame={theme.frame ?? "none"}
+          color={theme.heading}
+          background={theme.background}
+        />
       </View>
     </Pressable>
   );
@@ -381,7 +423,7 @@ function Zone({
 // clear divider on a menu zone's right/bottom edge when the block touching it
 // there is *also* a menu. Each shared edge is "owned" by the left/top zone, so
 // the line is drawn exactly once (never against image/video blocks).
-const DIVIDER_W = 2;
+const DIVIDER_W = 1;
 function menuDivider(
   zone: ResolvedZone,
   zones: ResolvedZone[],
@@ -673,4 +715,17 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   offlineText: { color: "#fff", textAlign: "center", fontSize: 18 },
+
+  // Logo watermark: a centred bounding box the logo is contain-fitted into,
+  // drawn under the (background-free) menu zones. Box size + opacity come from
+  // the content payload, so they're inline styles at the render site.
+  watermarkWrap: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });

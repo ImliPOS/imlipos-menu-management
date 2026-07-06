@@ -5,7 +5,11 @@ import type {
   MenuCategoryView,
   ResolvedZone,
 } from "@imlipos/contracts";
-import { DEFAULT_THEME } from "@imlipos/contracts";
+import {
+  DEFAULT_THEME,
+  WATERMARK_SIZE_DEFAULT,
+  watermarkEligible,
+} from "@imlipos/contracts";
 import { db, schema } from "../db/client.js";
 
 const { categories, items, screenCategories } = schema;
@@ -82,6 +86,7 @@ export async function buildDeviceContent(
       fontSize: "medium",
       sliding: true,
       theme: DEFAULT_THEME,
+      watermark: null,
       version,
     };
   }
@@ -114,12 +119,24 @@ export async function buildDeviceContent(
     return { ...base, mediaUrl: z.mediaUrl ?? null };
   });
 
+  // The watermark ships to the TV only when the operator enabled it, uploaded a
+  // logo, and the whole display is menu blocks — re-checked here so a stale or
+  // hand-crafted layout can never watermark a display with media blocks.
+  const wm = layout.watermark;
+  const watermark =
+    wm?.enabled && wm.url && watermarkEligible(layout.zones)
+      ? // Layouts are stored as raw jsonb, so one saved before the size control
+        // existed has no `size` — fall back to the original fixed size.
+        { url: wm.url, opacity: wm.opacity, size: wm.size ?? WATERMARK_SIZE_DEFAULT }
+      : null;
+
   return {
     zones,
     orientation,
     fontSize: layout.fontSize ?? "medium",
     sliding: layout.sliding ?? true,
     theme: { ...DEFAULT_THEME, ...layout.theme },
+    watermark,
     version,
   };
 }

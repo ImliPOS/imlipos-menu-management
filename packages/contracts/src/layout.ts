@@ -65,6 +65,79 @@ export function resolveFontScale(f: MenuFont = MENU_SCALE_DEFAULT): number {
   return Math.min(MENU_SCALE_MAX, Math.max(MENU_SCALE_MIN, n));
 }
 
+/** Decorative border drawn around the whole display (over every zone). Purely
+ *  cosmetic — it's rendered in the category-heading colour and never affects
+ *  layout/pagination. `none` (the default) draws nothing. See frameSpec() for
+ *  each style's geometry; both the web preview and the TV render from it so they
+ *  stay identical. */
+export const DISPLAY_FRAMES = [
+  "none",
+  "doubleLine",
+  "bracketed",
+  "vintage",
+  "artDeco",
+  "decoCorners",
+] as const;
+export const displayFrame = z.enum(DISPLAY_FRAMES);
+export type DisplayFrame = (typeof DISPLAY_FRAMES)[number];
+
+/** Human labels for the frame picker. */
+export const DISPLAY_FRAME_LABELS: Record<DisplayFrame, string> = {
+  none: "None",
+  doubleLine: "Double line",
+  bracketed: "Bracketed border",
+  vintage: "Vintage border",
+  artDeco: "Art deco",
+  decoCorners: "Deco corners",
+};
+
+/** ---- Logo watermark ----
+ *  The shop's logo drawn once, centred behind the menu text, at an
+ *  operator-chosen opacity. Only available when EVERY block on the display is a
+ *  menu block (see watermarkEligible) — media blocks paint over the canvas, so a
+ *  watermark behind them would show through partially and look broken. */
+export const WATERMARK_OPACITY_MIN = 5;
+export const WATERMARK_OPACITY_MAX = 100;
+export const WATERMARK_OPACITY_DEFAULT = 15;
+/** The watermark's bounding box, as a % of each canvas axis; the logo is
+ *  contain-fitted inside it, centred. Operator-adjustable in STEP increments;
+ *  shared by the web preview and the TV so both draw the logo the same size. */
+export const WATERMARK_SIZE_MIN = 10;
+export const WATERMARK_SIZE_MAX = 100;
+export const WATERMARK_SIZE_STEP = 5;
+export const WATERMARK_SIZE_DEFAULT = 60;
+
+export const layoutWatermark = z.object({
+  enabled: z.boolean().default(false),
+  /** Uploaded logo image (Supabase Storage public URL). */
+  url: z.string().url().nullable().default(null),
+  /** Logo opacity in percent (100 = solid, lower = more transparent). */
+  opacity: z
+    .number()
+    .min(WATERMARK_OPACITY_MIN)
+    .max(WATERMARK_OPACITY_MAX)
+    .default(WATERMARK_OPACITY_DEFAULT),
+  /** Bounding-box size in percent of each canvas axis (contain-fitted). */
+  size: z
+    .number()
+    .min(WATERMARK_SIZE_MIN)
+    .max(WATERMARK_SIZE_MAX)
+    .default(WATERMARK_SIZE_DEFAULT),
+});
+export type LayoutWatermark = z.infer<typeof layoutWatermark>;
+
+export const DEFAULT_WATERMARK: LayoutWatermark = {
+  enabled: false,
+  url: null,
+  opacity: WATERMARK_OPACITY_DEFAULT,
+  size: WATERMARK_SIZE_DEFAULT,
+};
+
+/** A watermark may only show when the whole display is menu blocks. */
+export function watermarkEligible(zones: Array<{ type: ZoneType }>): boolean {
+  return zones.length > 0 && zones.every((z) => z.type === "menu");
+}
+
 /** Per-display colour theme. `text` drives item names/prices; `heading` keeps
  *  the category-title accent separate so a light background can't hide it.
  *  Values are CSS colour strings (hex from the editor's colour pickers). */
@@ -74,18 +147,144 @@ export const layoutTheme = z.object({
   heading: z.string().default("#ffd700"),
   /** The line drawn between adjacent menu blocks. */
   divider: z.string().default("#52525b"),
+  /** Draw the separator lines at all (colour is kept while off). */
+  dividerEnabled: z.boolean().default(true),
+  /** Decorative border around the whole display (drawn in `heading`). */
+  frame: displayFrame.default("none"),
 });
 export type LayoutTheme = z.infer<typeof layoutTheme>;
 
 /** The default menu palette: black background, white item text, gold headings,
- *  grey separator lines. Used as the schema default and the editor's
+ *  grey separator lines, no frame. Used as the schema default and the editor's
  *  "Reset colors" target. */
 export const DEFAULT_THEME: LayoutTheme = {
   background: "#000000",
   text: "#ffffff",
   heading: "#ffd700",
   divider: "#52525b",
+  dividerEnabled: true,
+  frame: "none",
 };
+
+/** ---- Frame geometry (platform-neutral) ----
+ *  Every distance is in dp and anchored to the SCREEN EDGE, so a frame hugs the
+ *  display border and stays inside each menu block's MENU_BLOCK_PAD safety band
+ *  — it can never cross menu content. (Percent insets were the earlier bug: a
+ *  few percent of a 2000px panel is 50–150dp, deep inside the text.) The web
+ *  preview multiplies these dp by its px-per-dp scale; the TV uses them as-is.
+ *  Rendered identically by both overlays so the preview matches the panel. */
+
+/** A bordered rectangle, inset from each edge in dp. */
+export interface FrameRect {
+  t: number;
+  r: number;
+  b: number;
+  l: number;
+  /** Border weight in dp. */
+  weight: number;
+  /** Optional corner radius in dp. */
+  radius?: number;
+}
+/** A small square/diamond drawn at all four corners, centred `inset` dp in from
+ *  each corner. Used for the vintage/art-deco corner accents. */
+export interface FrameCorner {
+  /** Distance in dp from the corner to the accent's centre. */
+  inset: number;
+  /** Side length in dp. */
+  size: number;
+  /** Filled when true; otherwise an outline of `weight` dp. */
+  fill?: boolean;
+  weight?: number;
+  /** Rotate 45° into a diamond (default false → an upright square). */
+  rotate?: boolean;
+  /** Which colour to paint. "frame" (default) uses the heading colour; a
+   *  "background" corner is drawn in the display background — used to erase the
+   *  border's right-angle corner so an outline diamond can sit cleanly on it. */
+  color?: "frame" | "background";
+}
+/** An L-shaped mark drawn at all four corners: two legs meeting at a vertex that
+ *  sits `inset` dp in from the corner, each leg `arm` dp long. Multiple brackets
+ *  at different insets make concentric (stepped) corners. */
+export interface FrameBracket {
+  /** dp from each edge to the L's vertex. */
+  inset: number;
+  /** dp length of each leg (runs along the edge, inside the frame band). */
+  arm: number;
+  /** Line weight in dp. */
+  weight: number;
+}
+export interface FrameSpec {
+  rects: FrameRect[];
+  corners: FrameCorner[];
+  brackets: FrameBracket[];
+}
+
+/** When a frame is active the menu content is pulled in by this many dp on every
+ *  side, so the decorative border sits in a clear band and the menu never touches
+ *  it. `none` uses the full screen (no inset). The frame's own lines/ornaments
+ *  all sit inside this band (see frameSpec). */
+export const FRAME_CONTENT_INSET = 44;
+
+/** dp the menu content is inset for a given frame (0 when none). */
+export function frameContentInset(frame: DisplayFrame): number {
+  return frame === "none" ? 0 : FRAME_CONTENT_INSET;
+}
+
+/** A rectangle inset equally on every side (dp). */
+function sq(inset: number, weight: number, radius?: number): FrameRect {
+  return { t: inset, r: inset, b: inset, l: inset, weight, radius };
+}
+
+const EMPTY_FRAME: FrameSpec = { rects: [], corners: [], brackets: [] };
+
+/** Resolve a frame style to its drawable primitives. `none` draws nothing. All
+ *  perpendicular insets sit inside FRAME_CONTENT_INSET so the frame is clearly
+ *  visible in its band and never overlaps the (inset) menu content. */
+export function frameSpec(frame: DisplayFrame): FrameSpec {
+  switch (frame) {
+    case "doubleLine":
+      // Two clean concentric rules with an even gap — restrained and modern.
+      return { rects: [sq(15, 2), sq(23, 1)], corners: [], brackets: [] };
+    case "bracketed":
+      // Fine full border with a small square notch on each corner and an inner
+      // L-bracket running parallel to it — a layered, classic corner treatment.
+      return {
+        rects: [sq(14, 1.5)],
+        corners: [{ inset: 14, size: 9, fill: false, weight: 1.5 }],
+        brackets: [{ inset: 22, arm: 54, weight: 1.5 }],
+      };
+    case "vintage":
+      // Heavy outer rule, fine inner rule, and a solid diamond seated on each
+      // outer corner — a classic ornamented menu-board border.
+      return {
+        rects: [sq(13, 3), sq(22, 1)],
+        corners: [{ inset: 13, size: 15, fill: true, rotate: true }],
+        brackets: [],
+      };
+    case "artDeco":
+      // Thin full border, a solid diamond node at each corner, and a stepped
+      // inner corner bracket — the geometric art-deco signature.
+      return {
+        rects: [sq(14, 2)],
+        corners: [{ inset: 14, size: 13, fill: true, rotate: true }],
+        brackets: [{ inset: 24, arm: 66, weight: 2 }],
+      };
+    case "decoCorners":
+      // No continuous border: double concentric L-brackets at each corner with a
+      // hollow diamond on the vertex. Elegant and airy.
+      return {
+        rects: [],
+        corners: [{ inset: 18, size: 12, fill: false, rotate: true, weight: 2 }],
+        brackets: [
+          { inset: 18, arm: 96, weight: 2 },
+          { inset: 25, arm: 70, weight: 1 },
+        ],
+      };
+    case "none":
+    default:
+      return EMPTY_FRAME;
+  }
+}
 
 export const deviceLayout = z.object({
   template: z.string(),
@@ -105,6 +304,10 @@ export const deviceLayout = z.object({
    *  flowCategoriesAcrossZones(). When false, every block keeps exactly its own
    *  assigned items (the original manual model). */
   autoFlow: z.boolean().default(true),
+  /** Shop-logo watermark behind the menu. Stored even when the layout later
+   *  stops being all-menu (so the choice survives template switches), but only
+   *  RENDERED when watermarkEligible(zones) — enforced by deviceContent. */
+  watermark: layoutWatermark.default(DEFAULT_WATERMARK),
 });
 export type DeviceLayout = z.infer<typeof deviceLayout>;
 
@@ -145,6 +348,17 @@ export const deviceContent = z.object({
   sliding: z.boolean().default(true),
   /** Per-display colour theme (background / item text / category heading). */
   theme: layoutTheme.default(DEFAULT_THEME),
+  /** Resolved logo watermark — present only when the operator enabled it, a
+   *  logo is uploaded AND every zone is a menu block; null otherwise. `size`
+   *  defaults so content cached before the size control existed still parses. */
+  watermark: z
+    .object({
+      url: z.string().url(),
+      opacity: z.number(),
+      size: z.number().default(WATERMARK_SIZE_DEFAULT),
+    })
+    .nullable()
+    .default(null),
   version: z.number().int(),
 });
 export type DeviceContent = z.infer<typeof deviceContent>;
