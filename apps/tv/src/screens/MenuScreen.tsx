@@ -22,7 +22,7 @@ import {
   MENU_BLOCK_PAD,
   menuStyle,
   paginateMenu,
-  WATERMARK_SIZE_PCT,
+  WATERMARK_SIZE_DEFAULT,
 } from "@imlipos/contracts";
 import { DEFAULT_THEME } from "@imlipos/contracts";
 import type {
@@ -285,10 +285,13 @@ export function MenuScreen({
           <View pointerEvents="none" style={styles.watermarkWrap}>
             <Image
               source={{ uri: sizedImage(content.watermark.url, 960) }}
-              style={[
-                styles.watermarkImg,
-                { opacity: content.watermark.opacity / 100 },
-              ]}
+              style={{
+                // Old cached snapshots predate the size control — keep the
+                // original fixed size until fresh content arrives.
+                width: `${content.watermark.size ?? WATERMARK_SIZE_DEFAULT}%`,
+                height: `${content.watermark.size ?? WATERMARK_SIZE_DEFAULT}%`,
+                opacity: content.watermark.opacity / 100,
+              }}
               contentFit="contain"
               cachePolicy="memory-disk"
             />
@@ -712,7 +715,8 @@ const styles = StyleSheet.create({
   offlineText: { color: "#fff", textAlign: "center", fontSize: 18 },
 
   // Logo watermark: a centred bounding box the logo is contain-fitted into,
-  // drawn under the (background-free) menu zones.
+  // drawn under the (background-free) menu zones. Box size + opacity come from
+  // the content payload, so they're inline styles at the render site.
   watermarkWrap: {
     position: "absolute",
     top: 0,
@@ -721,9 +725,5 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: "center",
     justifyContent: "center",
-  },
-  watermarkImg: {
-    width: `${WATERMARK_SIZE_PCT}%`,
-    height: `${WATERMARK_SIZE_PCT}%`,
   },
 });

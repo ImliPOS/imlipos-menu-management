@@ -24,7 +24,9 @@ import {
   MENU_BLOCK_PAD,
   WATERMARK_OPACITY_MAX,
   WATERMARK_OPACITY_MIN,
-  WATERMARK_SIZE_PCT,
+  WATERMARK_SIZE_MAX,
+  WATERMARK_SIZE_MIN,
+  WATERMARK_SIZE_STEP,
   watermarkEligible,
   MENU_SCALE_DEFAULT,
   MENU_SCALE_MAX,
@@ -902,6 +904,50 @@ export function LayoutEditorPanel({
                     Preview updates live below.
                   </p>
                 </div>
+                <div className="space-y-1">
+                  <Label>Size</Label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      aria-label="Decrease watermark size"
+                      onClick={() =>
+                        patchWatermark({
+                          size: Math.max(
+                            WATERMARK_SIZE_MIN,
+                            watermark.size - WATERMARK_SIZE_STEP,
+                          ),
+                        })
+                      }
+                      disabled={watermark.size <= WATERMARK_SIZE_MIN}
+                      className="flex h-9 w-9 items-center justify-center rounded-md border border-input bg-background text-lg leading-none hover:bg-secondary/60 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      −
+                    </button>
+                    <span className="w-12 text-center text-sm tabular-nums">
+                      {watermark.size}%
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Increase watermark size"
+                      onClick={() =>
+                        patchWatermark({
+                          size: Math.min(
+                            WATERMARK_SIZE_MAX,
+                            watermark.size + WATERMARK_SIZE_STEP,
+                          ),
+                        })
+                      }
+                      disabled={watermark.size >= WATERMARK_SIZE_MAX}
+                      className="flex h-9 w-9 items-center justify-center rounded-md border border-input bg-background text-lg leading-none hover:bg-secondary/60 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    How much of the display the logo covers, centred (100% fills
+                    it edge to edge).
+                  </p>
+                </div>
               </div>
             )}
           </div>
@@ -928,8 +974,8 @@ export function LayoutEditorPanel({
                     alt=""
                     className="object-contain"
                     style={{
-                      width: `${WATERMARK_SIZE_PCT}%`,
-                      height: `${WATERMARK_SIZE_PCT}%`,
+                      width: `${watermark.size}%`,
+                      height: `${watermark.size}%`,
                       opacity: watermark.opacity / 100,
                     }}
                   />

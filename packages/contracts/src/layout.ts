@@ -100,9 +100,12 @@ export const WATERMARK_OPACITY_MIN = 5;
 export const WATERMARK_OPACITY_MAX = 100;
 export const WATERMARK_OPACITY_DEFAULT = 15;
 /** The watermark's bounding box, as a % of each canvas axis; the logo is
- *  contain-fitted inside it, centred. Shared by the web preview and the TV so
- *  both draw the logo the same size. */
-export const WATERMARK_SIZE_PCT = 60;
+ *  contain-fitted inside it, centred. Operator-adjustable in STEP increments;
+ *  shared by the web preview and the TV so both draw the logo the same size. */
+export const WATERMARK_SIZE_MIN = 10;
+export const WATERMARK_SIZE_MAX = 100;
+export const WATERMARK_SIZE_STEP = 5;
+export const WATERMARK_SIZE_DEFAULT = 60;
 
 export const layoutWatermark = z.object({
   enabled: z.boolean().default(false),
@@ -114,6 +117,12 @@ export const layoutWatermark = z.object({
     .min(WATERMARK_OPACITY_MIN)
     .max(WATERMARK_OPACITY_MAX)
     .default(WATERMARK_OPACITY_DEFAULT),
+  /** Bounding-box size in percent of each canvas axis (contain-fitted). */
+  size: z
+    .number()
+    .min(WATERMARK_SIZE_MIN)
+    .max(WATERMARK_SIZE_MAX)
+    .default(WATERMARK_SIZE_DEFAULT),
 });
 export type LayoutWatermark = z.infer<typeof layoutWatermark>;
 
@@ -121,6 +130,7 @@ export const DEFAULT_WATERMARK: LayoutWatermark = {
   enabled: false,
   url: null,
   opacity: WATERMARK_OPACITY_DEFAULT,
+  size: WATERMARK_SIZE_DEFAULT,
 };
 
 /** A watermark may only show when the whole display is menu blocks. */
@@ -336,9 +346,14 @@ export const deviceContent = z.object({
   /** Per-display colour theme (background / item text / category heading). */
   theme: layoutTheme.default(DEFAULT_THEME),
   /** Resolved logo watermark — present only when the operator enabled it, a
-   *  logo is uploaded AND every zone is a menu block; null otherwise. */
+   *  logo is uploaded AND every zone is a menu block; null otherwise. `size`
+   *  defaults so content cached before the size control existed still parses. */
   watermark: z
-    .object({ url: z.string().url(), opacity: z.number() })
+    .object({
+      url: z.string().url(),
+      opacity: z.number(),
+      size: z.number().default(WATERMARK_SIZE_DEFAULT),
+    })
     .nullable()
     .default(null),
   version: z.number().int(),
