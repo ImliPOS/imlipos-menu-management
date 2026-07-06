@@ -14,7 +14,7 @@ const PROJECT = isProd
   ? {
       id: "c17d31f2-d2bd-43ad-8bc2-b73fbcdb97cc",
       slug: "imlipos-tv",
-      name: "ImliPos TV",
+      name: "Imli Menu management",
       pkg: "com.imlipos.tv",
     }
   : {
