@@ -5,7 +5,11 @@ import type {
   MenuCategoryView,
   ResolvedZone,
 } from "@imlipos/contracts";
-import { DEFAULT_THEME, watermarkEligible } from "@imlipos/contracts";
+import {
+  DEFAULT_THEME,
+  WATERMARK_SIZE_DEFAULT,
+  watermarkEligible,
+} from "@imlipos/contracts";
 import { db, schema } from "../db/client.js";
 
 const { categories, items, screenCategories } = schema;
@@ -121,7 +125,9 @@ export async function buildDeviceContent(
   const wm = layout.watermark;
   const watermark =
     wm?.enabled && wm.url && watermarkEligible(layout.zones)
-      ? { url: wm.url, opacity: wm.opacity }
+      ? // Layouts are stored as raw jsonb, so one saved before the size control
+        // existed has no `size` — fall back to the original fixed size.
+        { url: wm.url, opacity: wm.opacity, size: wm.size ?? WATERMARK_SIZE_DEFAULT }
       : null;
 
   return {
