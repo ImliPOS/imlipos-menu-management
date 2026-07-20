@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 import { createHash, randomBytes, randomInt } from "node:crypto";
 import {
   pairDeviceSchema,
@@ -16,6 +16,7 @@ import {
   emitDeviceRefresh,
 } from "../realtime/io.js";
 import { buildDeviceContent } from "../services/deviceContent.js";
+import { getDeviceEntitlement } from "../billing/limits.js";
 
 const { devices, screens } = schema;
 export const devicesRouter = Router();
@@ -110,6 +111,27 @@ devicesRouter.post("/pair", requireOwner, async (req, res) => {
     )
     .limit(1);
   if (!device) return res.status(404).json({ error: "Invalid or expired code" });
+
+  // Plan enforcement: only ACTIVE devices count (revoking frees a slot; a
+  // revoked device must re-register, so re-pairing at the limit is blocked
+  // too). Runs before the screen auto-creation below so a rejected pairing
+  // never leaves an orphan screen. Free tier (no subscription) = 1 display.
+  const [entitlement, [activeCount]] = await Promise.all([
+    getDeviceEntitlement(shopId(req)),
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(devices)
+      .where(and(eq(devices.shopId, shopId(req)), eq(devices.status, "active"))),
+  ]);
+  const active = activeCount?.n ?? 0;
+  if (active >= entitlement.limit) {
+    return res.status(403).json({
+      error: "Display limit reached",
+      code: "DEVICE_LIMIT",
+      limit: entitlement.limit,
+      active,
+    });
+  }
 
   // Resolve the screen to bind: an existing owner-owned screen, or a freshly
   // auto-created one for this display (the default flow).

@@ -1,20 +1,33 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Tags,
   BookOpen,
   QrCode,
-  User,
   LogOut,
   PanelLeft,
   Menu as MenuIcon,
+  Settings,
   X,
   ChevronsUpDown,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import {
+  SettingsModal,
+  type SettingsSection,
+} from "@/components/settings/SettingsModal";
+import { SettingsModalProvider } from "@/components/settings/SettingsModalContext";
+import { PublicFooter } from "@/components/legal/PublicFooter";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,7 +61,6 @@ const TITLES: Record<string, string> = {
   "/categories": "Category",
   "/menu": "Menu",
   "/screens/pair": "Pair a Display",
-  "/profile": "Profile",
 };
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -60,12 +72,28 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [email, setEmail] = useState<string>("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [settings, setSettings] = useState<{
+    open: boolean;
+    section: SettingsSection;
+  }>({ open: false, section: "general" });
 
   useEffect(() => {
     const saved = localStorage.getItem("imlipos.sidebarCollapsed");
     if (saved) setCollapsed(saved === "1");
-    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? ""));
+    supabase.auth.getUser().then(({ data }) => {
+      setEmail(data.user?.email ?? "");
+      setAvatarUrl(
+        (data.user?.user_metadata?.avatar_url as string | undefined) ?? null,
+      );
+    });
   }, []);
+
+  const openSettings = useCallback((section: SettingsSection) => {
+    setMobileOpen(false);
+    setSettings({ open: true, section });
+  }, []);
+  const settingsCtx = useMemo(() => ({ openSettings }), [openSettings]);
 
   function toggleCollapsed() {
     setCollapsed((c) => {
@@ -124,12 +152,18 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* Footer: user dropdown */}
       <div className="border-t border-border p-2">
-        <UserMenu email={email} collapsed={collapsed} />
+        <UserMenu
+          email={email}
+          avatarUrl={avatarUrl}
+          collapsed={collapsed}
+          onOpenSettings={openSettings}
+        />
       </div>
     </div>
   );
 
   return (
+    <SettingsModalProvider value={settingsCtx}>
     <div className="flex h-[100dvh] w-full overflow-hidden">
       {/* Desktop sidebar */}
       <aside
@@ -180,18 +214,52 @@ export function AppShell({ children }: { children: ReactNode }) {
           <h1 className="text-lg font-semibold">{title}</h1>
         </header>
         <main className="flex-1 overflow-y-auto">{children}</main>
+        <PublicFooter />
       </div>
+
+      <SettingsModal
+        open={settings.open}
+        section={settings.section}
+        onOpenChange={(open) => setSettings((s) => ({ ...s, open }))}
+        onSectionChange={(section) => setSettings((s) => ({ ...s, section }))}
+      />
     </div>
+    </SettingsModalProvider>
   );
 }
 
-/** Footer account button that opens a dropdown (Profile, Log out). */
-function UserMenu({ email, collapsed }: { email: string; collapsed: boolean }) {
+/** Footer account button that opens a dropdown (Settings, Upgrade, Log out). */
+function UserMenu({
+  email,
+  avatarUrl,
+  collapsed,
+  onOpenSettings,
+}: {
+  email: string;
+  avatarUrl: string | null;
+  collapsed: boolean;
+  onOpenSettings: (section: SettingsSection) => void;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const initial = email ? email[0]?.toUpperCase() : "?";
+
+  const Avatar = ({ size }: { size: "sm" | "md" }) => (
+    <div
+      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-md bg-secondary text-xs ${
+        size === "sm" ? "h-7 w-7" : "h-8 w-8"
+      }`}
+    >
+      {avatarUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+      ) : (
+        initial
+      )}
+    </div>
+  );
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
@@ -214,9 +282,7 @@ function UserMenu({ email, collapsed }: { email: string; collapsed: boolean }) {
           collapsed ? "justify-center" : ""
         }`}
       >
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-secondary text-xs">
-          {initial}
-        </div>
+        <Avatar size="sm" />
         {!collapsed && (
           <>
             <span className="flex-1 truncate text-sm text-muted-foreground">{email}</span>
@@ -232,17 +298,21 @@ function UserMenu({ email, collapsed }: { email: string; collapsed: boolean }) {
           }`}
         >
           <div className="flex items-center gap-2 border-b border-border px-3 py-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-secondary text-xs">
-              {initial}
-            </div>
+            <Avatar size="md" />
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{email || "Signed in"}</p>
             </div>
           </div>
           <div className="py-1">
-            <MenuLink href="/profile" icon={User} onClick={() => setOpen(false)}>
-              Profile
-            </MenuLink>
+            <MenuItem
+              icon={Settings}
+              onClick={() => {
+                setOpen(false);
+                onOpenSettings("general");
+              }}
+            >
+              Settings
+            </MenuItem>
           </div>
           <div className="border-t border-border py-1">
             <button
@@ -279,25 +349,22 @@ function UserMenu({ email, collapsed }: { email: string; collapsed: boolean }) {
   );
 }
 
-function MenuLink({
-  href,
+function MenuItem({
   icon: Icon,
   onClick,
   children,
 }: {
-  href: string;
   icon: React.ElementType;
   onClick: () => void;
   children: ReactNode;
 }) {
   return (
-    <Link
-      href={href}
+    <button
       onClick={onClick}
-      className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
+      className="flex w-full items-center gap-2 px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
     >
       <Icon className="h-4 w-4" />
       {children}
-    </Link>
+    </button>
   );
 }

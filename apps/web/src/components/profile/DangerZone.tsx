@@ -32,7 +32,7 @@ export function DangerZone() {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-10 lg:grid-cols-3">
+    <div className="space-y-6">
       <div className="flex flex-col space-y-1">
         <h3 className="font-semibold">Danger Zone</h3>
         <p className="text-sm text-muted-foreground">
@@ -41,7 +41,7 @@ export function DangerZone() {
         </p>
       </div>
 
-      <div className="lg:col-span-2">
+      <div>
         <Card>
           <CardContent>
             <div className="flex justify-between gap-4 max-lg:flex-col lg:items-center">

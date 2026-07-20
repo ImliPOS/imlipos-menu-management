@@ -3,14 +3,19 @@
 import {
   appUrls,
   resolveAppEnv,
+  type BillingUsage,
   type Category,
+  type CheckoutResponse,
   type CreateCategoryInput,
   type CreateItemInput,
   type CreateScreenInput,
   type Device,
   type Item,
+  type OwnerBillingSummary,
   type PairDeviceInput,
+  type Plan,
   type Screen,
+  type SubscriptionOrder,
   type UpdateItemInput,
   type DeviceLayout,
 } from "@imlipos/contracts";
@@ -29,6 +34,24 @@ async function getApiToken(): Promise<string> {
   return token;
 }
 
+/** API failure carrying the HTTP status and parsed JSON body (if any). */
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    public body: unknown,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+/** The machine-readable `code` field from an ApiError body, if present. */
+export function apiErrorCode(err: unknown): string | null {
+  if (!(err instanceof ApiError)) return null;
+  const code = (err.body as { code?: unknown } | null)?.code;
+  return typeof code === "string" ? code : null;
+}
+
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = await getApiToken();
   const res = await fetch(`${API}${path}`, {
@@ -39,7 +62,16 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
       ...(init.headers ?? {}),
     },
   });
-  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
+  if (!res.ok) {
+    const text = await res.text();
+    let body: unknown = null;
+    try {
+      body = JSON.parse(text);
+    } catch {
+      // non-JSON error body — keep body null
+    }
+    throw new ApiError(res.status, body, `API ${res.status}: ${text}`);
+  }
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
 }
 
@@ -120,6 +152,22 @@ export const api = {
       method: "POST",
       body: JSON.stringify(b),
     }),
+  // billing
+  billingPlans: () => call<Plan[]>("/billing/plans"),
+  billingSummary: () => call<OwnerBillingSummary>("/billing/subscription"),
+  billingUsage: () => call<BillingUsage>("/billing/usage"),
+  billingOrders: () => call<SubscriptionOrder[]>("/billing/orders"),
+  checkout: (planId: string) =>
+    call<CheckoutResponse>("/billing/checkout", {
+      method: "POST",
+      body: JSON.stringify({ planId }),
+    }),
+  getOrder: (id: string) => call<SubscriptionOrder>(`/billing/orders/${id}`),
+  mockPay: (orderId: string) =>
+    call<{ order: SubscriptionOrder | null }>(
+      `/billing/orders/${orderId}/mock-pay`,
+      { method: "POST" },
+    ),
   // media
   presign: (contentType: string, size: number) =>
     call<{ uploadUrl: string; token: string; publicUrl: string; path: string }>(

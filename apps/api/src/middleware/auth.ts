@@ -65,6 +65,23 @@ export async function requireOwner(
 }
 
 /**
+ * Require the platform operator (Supabase app_metadata.role = "super_admin").
+ * Grants cross-tenant access — only the /admin routes should use this.
+ */
+export async function requireSuperAdmin(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  await requireAuth(req, res, async () => {
+    if (req.auth!.role !== "super_admin") {
+      return res.status(403).json({ error: "Super admin only" });
+    }
+    next();
+  });
+}
+
+/**
  * Require a device token (TV). Sets req.device. Also verifies the device row
  * still exists and is active — so deleting or revoking a device immediately
  * invalidates its (otherwise stateless) token.
