@@ -9,8 +9,13 @@ import { itemsRouter } from "./routes/items.js";
 import { screensRouter } from "./routes/screens.js";
 import { devicesRouter } from "./routes/devices.js";
 import { mediaRouter } from "./routes/media.js";
+import { adminRouter } from "./routes/admin.js";
+import { billingRouter, billingWebhookRouter } from "./routes/billing.js";
 
 const app = express();
+// Webhooks need the raw request bytes for signature verification, so this
+// mount must stay ahead of the JSON body parser.
+app.use("/billing/webhook", express.raw({ type: "*/*" }), billingWebhookRouter);
 app.use(express.json({ limit: "1mb" }));
 app.use(cors({ origin: corsOrigin, credentials: true }));
 
@@ -31,6 +36,8 @@ app.use("/items", itemsRouter);
 app.use("/screens", screensRouter);
 app.use("/devices", devicesRouter);
 app.use("/media", mediaRouter);
+app.use("/admin", adminRouter);
+app.use("/billing", billingRouter);
 
 // Centralised error guard.
 app.use(

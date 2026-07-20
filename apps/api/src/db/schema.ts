@@ -21,6 +21,18 @@ export const deviceStatusEnum = pgEnum("device_status", [
   "revoked",
 ]);
 export const orientationEnum = pgEnum("orientation", ["landscape", "portrait"]);
+export const subscriptionStatusEnum = pgEnum("subscription_status", [
+  "trialing",
+  "active",
+  "expired",
+  "cancelled",
+]);
+export const orderStatusEnum = pgEnum("order_status", [
+  "pending",
+  "paid",
+  "failed",
+  "cancelled",
+]);
 
 /**
  * ---- Tenancy ----
@@ -160,5 +172,101 @@ export const devices = pgTable(
   (t) => ({
     codeIdx: index("devices_pairing_code_idx").on(t.pairingCode),
     screenIdx: index("devices_screen_idx").on(t.screenId),
+  }),
+);
+
+/**
+ * ---- Plans & subscriptions (super-admin managed) ----
+ * No payment provider yet: plans are catalog rows and subscriptions are
+ * assigned manually from the admin console. Price is display-only.
+ */
+export const plans = pgTable("plans", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull().unique(),
+  description: text("description"),
+  deviceLimit: integer("device_limit").notNull().default(1),
+  priceMonthly: numeric("price_monthly", { precision: 10, scale: 2 }),
+  /** Retired plans keep history but can't be assigned to new subscriptions. */
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const subscriptions = pgTable(
+  "subscriptions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    shopId: uuid("shop_id")
+      .notNull()
+      .references(() => shops.id, { onDelete: "cascade" }),
+    planId: uuid("plan_id")
+      .notNull()
+      .references(() => plans.id, { onDelete: "restrict" }),
+    status: subscriptionStatusEnum("status").notNull().default("active"),
+    startsAt: timestamp("starts_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    /** null = open-ended. */
+    endsAt: timestamp("ends_at", { withTimezone: true }),
+    /** null = use the plan's deviceLimit. */
+    deviceLimitOverride: integer("device_limit_override"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    shopIdx: index("subscriptions_shop_idx").on(t.shopId),
+    // Per-licence model: a shop may hold multiple live subscriptions, one per
+    // paid display licence — so there is no single-live-subscription index.
+  }),
+);
+
+/**
+ * Checkout orders for subscription purchases. Provider-agnostic: `provider`
+ * is 'mock' until a real gateway (Razorpay/Stripe) is integrated; the
+ * provider's own ids land in providerOrderId/providerPaymentId.
+ */
+export const subscriptionOrders = pgTable(
+  "subscription_orders",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    shopId: uuid("shop_id")
+      .notNull()
+      .references(() => shops.id, { onDelete: "cascade" }),
+    planId: uuid("plan_id")
+      .notNull()
+      .references(() => plans.id, { onDelete: "restrict" }),
+    /** Snapshot of the plan price at checkout time. */
+    amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+    currency: text("currency").notNull().default("INR"),
+    status: orderStatusEnum("status").notNull().default("pending"),
+    provider: text("provider").notNull(),
+    providerOrderId: text("provider_order_id"),
+    providerPaymentId: text("provider_payment_id"),
+    /** Set once paid — the subscription this order created. */
+    subscriptionId: uuid("subscription_id").references(() => subscriptions.id, {
+      onDelete: "set null",
+    }),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    shopIdx: index("subscription_orders_shop_idx").on(t.shopId),
+    providerOrderIdx: index("subscription_orders_provider_order_idx").on(
+      t.providerOrderId,
+    ),
   }),
 );

@@ -141,7 +141,7 @@ export const AuthPanel: React.FC<AuthPanelProps> = ({
   }
 
   return (
-    <div className="flex h-[100dvh] w-full flex-col md:flex-row">
+    <div className="flex min-h-0 w-full flex-1 flex-col md:flex-row">
       {/* Left column: auth form */}
       <section className="flex flex-1 items-center justify-center p-8">
         <div className="w-full max-w-md">
