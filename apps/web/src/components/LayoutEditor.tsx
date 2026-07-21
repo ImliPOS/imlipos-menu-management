@@ -959,8 +959,9 @@ export function LayoutEditorPanel({
                     </button>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    How much of the display the logo covers, centred (100% fills
-                    it edge to edge).
+                    How much of the display the logo covers, centred. 100%
+                    fills it edge to edge; above 100% the logo zooms in and is
+                    cropped at the edges.
                   </p>
                 </div>
               </div>
