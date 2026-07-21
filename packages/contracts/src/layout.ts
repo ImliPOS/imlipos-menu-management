@@ -101,9 +101,11 @@ export const WATERMARK_OPACITY_MAX = 100;
 export const WATERMARK_OPACITY_DEFAULT = 15;
 /** The watermark's bounding box, as a % of each canvas axis; the logo is
  *  contain-fitted inside it, centred. Operator-adjustable in STEP increments;
- *  shared by the web preview and the TV so both draw the logo the same size. */
+ *  shared by the web preview and the TV so both draw the logo the same size.
+ *  Values above 100 push the box past the canvas edges — the logo zooms in and
+ *  crops symmetrically, useful for logo images with lots of built-in padding. */
 export const WATERMARK_SIZE_MIN = 10;
-export const WATERMARK_SIZE_MAX = 100;
+export const WATERMARK_SIZE_MAX = 200;
 export const WATERMARK_SIZE_STEP = 5;
 export const WATERMARK_SIZE_DEFAULT = 60;
 
