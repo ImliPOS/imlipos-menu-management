@@ -6,6 +6,22 @@ import { supabase } from "@/lib/supabase";
 import { AuthPanel } from "@/components/ui/sign-in";
 import { PublicFooter } from "@/components/legal/PublicFooter";
 
+// TEMPORARY: test credentials for PhonePe Business verification.
+// Remove this banner before merging to main/prod.
+function TestCredentialsBanner() {
+  return (
+    <div className="animate-element animate-delay-200 rounded-2xl border border-amber-400/40 bg-amber-400/10 p-4 text-sm">
+      <p className="font-medium text-amber-400">Test account for verification</p>
+      <p className="mt-1 text-muted-foreground">
+        Email: <span className="select-all font-mono text-foreground">testimli@gmail.com</span>
+      </p>
+      <p className="text-muted-foreground">
+        Password: <span className="select-all font-mono text-foreground">testimli</span>
+      </p>
+    </div>
+  );
+}
+
 export default function SignInPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +45,7 @@ export default function SignInPage() {
         submitLabel="Sign in"
         busy={busy}
         error={error}
+        banner={<TestCredentialsBanner />}
         footerPrompt="New to ImliPos?"
         footerActionLabel="Create an account"
         onFooterAction={() => router.push("/signup")}
