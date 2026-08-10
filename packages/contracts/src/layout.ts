@@ -767,17 +767,66 @@ export const MENU_METRICS = menuStyle("medium");
 /** Horizontal gap (dp) between an item's name and its price (styles.row gap). */
 export const MENU_ITEM_GAP = 8;
 
+/** Advance-width ratios (glyph width ÷ font size) for Roboto Regular, so text
+ *  width can be estimated without a canvas — the TV has no way to measure text
+ *  before laying it out, yet its pagination must know how many lines a name
+ *  wraps to. Regenerate in a browser console with Roboto loaded:
+ *  c.font = "400 1000px Roboto"; c.measureText(ch).width / 1000. */
+const ROBOTO_RATIO: Record<string, number> = {
+  " ": 0.248, "!": 0.258, '"': 0.32, "#": 0.616, "$": 0.562, "%": 0.733,
+  "&": 0.622, "'": 0.174, "(": 0.342, ")": 0.348, "*": 0.431, "+": 0.567,
+  ",": 0.196, "-": 0.276, ".": 0.263, "/": 0.412, ":": 0.242, ";": 0.211,
+  "<": 0.508, "=": 0.549, ">": 0.522, "?": 0.472, "@": 0.898, "[": 0.265,
+  "\\": 0.41, "]": 0.265, "^": 0.418, "_": 0.451, "`": 0.309, "{": 0.339,
+  "|": 0.244, "}": 0.339, "~": 0.68, "₹": 0.569,
+  "0": 0.562, "1": 0.562, "2": 0.562, "3": 0.562, "4": 0.562,
+  "5": 0.562, "6": 0.562, "7": 0.562, "8": 0.562, "9": 0.562,
+  A: 0.652, B: 0.622, C: 0.651, D: 0.656, E: 0.568, F: 0.553, G: 0.68,
+  H: 0.712, I: 0.272, J: 0.551, K: 0.626, L: 0.538, M: 0.876, N: 0.712,
+  O: 0.686, P: 0.631, Q: 0.686, R: 0.615, S: 0.593, T: 0.596, U: 0.648,
+  V: 0.636, W: 0.887, X: 0.626, Y: 0.6, Z: 0.598,
+  a: 0.544, b: 0.561, c: 0.523, d: 0.564, e: 0.53, f: 0.347, g: 0.561,
+  h: 0.551, i: 0.243, j: 0.239, k: 0.507, l: 0.243, m: 0.874, n: 0.552,
+  o: 0.57, p: 0.561, q: 0.567, r: 0.339, s: 0.516, t: 0.327, u: 0.551,
+  v: 0.485, w: 0.752, x: 0.496, y: 0.485, z: 0.496,
+};
+const ROBOTO_DEFAULT_RATIO = 0.6;
+const ROBOTO_BOLD_FACTOR = 1.03;
+/** Bias line-count estimates high: over-reserving leaves a small gap at a
+ *  block's bottom (benign), under-reserving clips the last row of a page. */
+const ESTIMATE_SAFETY = 1.05;
+
+/** Estimate the rendered width (dp) of `text` at `fontPx` in Roboto. Used when
+ *  a real measurement isn't available (on the TV, or in the editor before
+ *  fonts load). */
+export function estimateTextWidth(text: string, fontPx: number, weight: 400 | 700 = 400): number {
+  let units = 0;
+  for (const ch of text) units += ROBOTO_RATIO[ch] ?? ROBOTO_DEFAULT_RATIO;
+  return units * fontPx * (weight >= 700 ? ROBOTO_BOLD_FACTOR : 1);
+}
+
 /** How many lines an item row takes in a block whose inner width is `innerW` dp.
- *  An item wraps to a 2nd line when its measured name can't sit on one line
- *  beside the price. Capped at 2 (longer names ellipsise on line 2). Falls back
- *  to 1 line when widths weren't measured, preserving the original behaviour. */
+ *  The name wraps within the column left beside the price (both sit in one flex
+ *  row: name shrinks, price doesn't), taking as many lines as it needs — names
+ *  are never truncated. Prefers the editor's measured widths; falls back to
+ *  estimateTextWidth() when `m` supplies the item font size, else assumes a
+ *  single line (the original metric-only behaviour). */
 export function itemLines(
-  item: { nameWidth?: number; priceWidth?: number },
+  item: { name?: string; price?: number; nameWidth?: number; priceWidth?: number },
   innerW: number,
-): 1 | 2 {
-  if (!item.nameWidth || innerW <= 0) return 1;
-  const nameCol = innerW - (item.priceWidth ?? 0) - MENU_ITEM_GAP;
-  return item.nameWidth > nameCol ? 2 : 1;
+  m?: { itemFont: number },
+): number {
+  if (innerW <= 0) return 1;
+  const nameW =
+    item.nameWidth ??
+    (item.name && m ? estimateTextWidth(item.name, m.itemFont, 400) * ESTIMATE_SAFETY : 0);
+  if (!nameW) return 1;
+  const priceW =
+    item.priceWidth ??
+    (item.price != null && m ? estimateTextWidth(`₹${item.price}`, m.itemFont, 700) : 0);
+  const nameCol = innerW - priceW - MENU_ITEM_GAP;
+  if (nameCol <= 0) return 1; // degenerate: block narrower than the price
+  return Math.max(1, Math.ceil(nameW / nameCol));
 }
 
 /** Total height (dp) of an item row spanning `lines` lines. */
@@ -798,7 +847,19 @@ export function itemHeight(lines: number, m: { itemLine: number; itemPadV: numbe
 export function paginateMenu(
   cats: PaginateCategory[],
   innerHeight: number,
-  m: { titleH: number; itemH: number; catGap: number; safeBottom?: number } = MENU_METRICS,
+  m: {
+    titleH: number;
+    itemH: number;
+    itemLine: number;
+    itemPadV: number;
+    itemFont: number;
+    catGap: number;
+    safeBottom?: number;
+  } = MENU_METRICS,
+  /** Inner width (dp) of the block. When given, rows are sized by how many
+   *  lines each name wraps to (see itemLines); when 0/absent every row is
+   *  assumed single-line — the original metric-only behaviour. */
+  innerWidth = 0,
 ): MenuLayout {
   const nonEmpty = cats.filter((c) => c.items.length > 0);
 
@@ -819,7 +880,11 @@ export function paginateMenu(
     // renders into, which falsely flagged a block as overflowing ("doesn't
     // fit") while visible space remained below the last row.
     const sep = fixed.length > 0 ? m.catGap : 0;
-    const need = sep + m.titleH + cat.items.length * m.itemH;
+    const itemsH = cat.items.reduce(
+      (sum, it) => sum + itemHeight(itemLines(it, innerWidth, m), m),
+      0,
+    );
+    const need = sep + m.titleH + itemsH;
     if (fixedUsed + need > usable) break;
     fixed.push({ id: cat.id, name: cat.name, items: cat.items });
     fixedUsed += need;
@@ -836,25 +901,37 @@ export function paginateMenu(
   const cycle: CyclingCategory[] = rest.map((cat) => ({
     id: cat.id,
     name: cat.name,
-    itemPages: pageItems(cat.items, tailHeight, m),
+    itemPages: pageItems(cat.items, tailHeight, m, innerWidth),
   }));
   return { fixed, cycle };
 }
 
 /** Split one category's items into pages that each fit `tailHeight` dp beneath a
  *  single static heading. The heading + trailing gap are reserved once (not per
- *  page), since the heading never moves. Always returns ≥1 page. */
+ *  page), since the heading never moves. Rows are packed by their wrapped height
+ *  (a page always takes ≥1 item, even one taller than the room). Always returns
+ *  ≥1 page. */
 function pageItems(
   items: MenuPageItem[],
   tailHeight: number,
-  m: { titleH: number; itemH: number; catGap: number },
+  m: { titleH: number; itemH: number; itemLine: number; itemPadV: number; itemFont: number; catGap: number },
+  innerWidth = 0,
 ): MenuPageItem[][] {
   const room = tailHeight - m.titleH - m.catGap;
-  const perPage = Math.max(1, Math.floor(room / m.itemH));
   const pages: MenuPageItem[][] = [];
-  for (let k = 0; k < items.length; k += perPage) {
-    pages.push(items.slice(k, k + perPage));
+  let page: MenuPageItem[] = [];
+  let used = 0;
+  for (const it of items) {
+    const h = itemHeight(itemLines(it, innerWidth, m), m);
+    if (page.length > 0 && used + h > room) {
+      pages.push(page);
+      page = [];
+      used = 0;
+    }
+    page.push(it);
+    used += h;
   }
+  if (page.length > 0) pages.push(page);
   return pages.length ? pages : [[]];
 }
 
@@ -958,8 +1035,8 @@ function groupToCats(
 
 /** The item ids that fit when `cats` are stacked statically in an `innerW`×`innerH`
  *  dp block — each category is a heading (titleH) + its rows, with a catGap between
- *  categories — exactly how a block renders. A row is one or two lines tall
- *  depending on whether its (measured) name wraps in `innerW` (see itemLines).
+ *  categories — exactly how a block renders. A row is as many lines tall as its
+ *  (measured or estimated) name wraps to in `innerW` (see itemLines).
  *  Returns the contiguous prefix that fits (stops at the first row that would
  *  overflow), so callers can split the stream on it. (paginateMenu can't be reused
  *  here: its cycling tail re-measures the overflowing category against the *full*
@@ -985,7 +1062,7 @@ function fittingIds(
     used += need;
     first = false;
     for (const it of c.items) {
-      const h = itemHeight(itemLines(it, innerW), m);
+      const h = itemHeight(itemLines(it, innerW, m), m);
       if (used + h > innerH) return kept; // next row would overflow
       used += h;
       kept.add(it.id);

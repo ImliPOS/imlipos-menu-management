@@ -1503,18 +1503,25 @@ function MenuBlock({
   transparent?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [blockPx, setBlockPx] = useState(0);
+  const [blockPx, setBlockPx] = useState({ w: 0, h: 0 });
   const [frame, setFrame] = useState(0);
   const ms = useMemo(() => menuStyle(fontSize), [fontSize]);
 
-  // Measure the block's pixel height → dp height (÷ scale), minus 32dp padding
-  // each side, is the content area the TV paginates against.
+  // Measure the block's pixel size → dp (÷ scale), minus 32dp padding each
+  // side, is the content area the TV paginates against (height for how much
+  // fits, width for how many lines each name wraps to).
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setBlockPx(el.clientHeight));
+    const measure = () =>
+      setBlockPx((s) =>
+        s.w === el.clientWidth && s.h === el.clientHeight
+          ? s
+          : { w: el.clientWidth, h: el.clientHeight },
+      );
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    setBlockPx(el.clientHeight);
+    measure();
     return () => ro.disconnect();
   }, []);
 
@@ -1534,11 +1541,13 @@ function MenuBlock({
   }, [zone.categoryIds, zone.hiddenItemIds, catById, itemsByCat]);
 
   const innerDp =
-    blockPx > 0 && scale > 0 ? blockPx / scale - MENU_BLOCK_PAD * 2 : 0;
+    blockPx.h > 0 && scale > 0 ? blockPx.h / scale - MENU_BLOCK_PAD * 2 : 0;
+  const innerWDp =
+    blockPx.w > 0 && scale > 0 ? blockPx.w / scale - MENU_BLOCK_PAD * 2 : 0;
   const { fixed, cycle } = useMemo(() => {
     if (innerDp <= 0) return { fixed: simple, cycle: [] };
-    return paginateMenu(simple, innerDp, ms);
-  }, [simple, innerDp, ms]);
+    return paginateMenu(simple, innerDp, ms, innerWDp);
+  }, [simple, innerDp, innerWDp, ms]);
 
   // With sliding OFF, decide "fits" by *measuring* the actually-rendered content
   // against the block's padded content area — not by estimating from metrics.
@@ -1553,18 +1562,18 @@ function MenuBlock({
       return;
     }
     const el = staticRef.current;
-    if (!el || blockPx <= 0 || scale <= 0) return;
-    const available = blockPx - MENU_BLOCK_PAD * 2 * scale; // minus padding each side
+    if (!el || blockPx.h <= 0 || scale <= 0) return;
+    const available = blockPx.h - MENU_BLOCK_PAD * 2 * scale; // minus padding each side
     setStaticOverflow(el.scrollHeight > available + 1); // +1px sub-pixel slack
-  }, [simple, fontSize, scale, blockPx, sliding]);
+  }, [simple, fontSize, scale, blockPx.h, sliding]);
 
   // Sliding on → metric pagination leaves a cycling tail; off → measured fit.
   const overflows = sliding
     ? innerDp > 0 && cycle.length > 0
-    : blockPx > 0 && staticOverflow;
+    : blockPx.h > 0 && staticOverflow;
   useEffect(() => {
-    if (blockPx > 0) onOverflow(zone.id, overflows);
-  }, [zone.id, overflows, blockPx, onOverflow]);
+    if (blockPx.h > 0) onOverflow(zone.id, overflows);
+  }, [zone.id, overflows, blockPx.h, onOverflow]);
 
   // Flatten cycling categories into item-page frames, each shown under its
   // category's static heading (mirrors the TV exactly). Empty with sliding off.
@@ -1612,7 +1621,6 @@ function MenuBlock({
                 theme={theme}
                 last={i === simple.length - 1}
                 hideTitle={hideHeadings?.has(pc.id) ?? false}
-                wrap
               />
             ))}
           </div>
@@ -1705,41 +1713,26 @@ function PreviewItemRow({
   scale,
   ms,
   theme,
-  wrap = false,
 }: {
   it: MenuPageItem;
   scale: number;
   ms: MenuStyle;
   theme: LayoutTheme;
-  /** Allow the name to wrap to a 2nd line (then ellipsise) instead of clipping
-   *  to one — matches the TV in sliding-off mode. */
-  wrap?: boolean;
 }) {
   return (
     <div
-      className={`flex justify-between ${wrap ? "items-start" : "items-center"}`}
+      className="flex items-start justify-between"
       style={{ padding: `${ms.itemPadV * scale}px 0`, gap: 8 * scale }}
     >
-      {/* Wrap up to 2 lines (then ellipsise) when wrapping is on; otherwise stay
-          single-line + ellipsis. The fit math reserves the matching height. */}
+      {/* Names always wrap to as many lines as they need — never truncated.
+          The fit math (itemLines) reserves the matching height, mirroring the TV. */}
       <span
-        className={
-          wrap
-            ? "min-w-0 overflow-hidden"
-            : "min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
-        }
+        className="min-w-0 overflow-hidden"
         style={{
           color: theme.text,
           fontSize: ms.itemFont * scale,
           lineHeight: `${ms.itemLine * scale}px`,
-          ...(wrap
-            ? {
-                display: "-webkit-box",
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: "vertical" as const,
-                overflowWrap: "anywhere" as const,
-              }
-            : {}),
+          overflowWrap: "anywhere",
         }}
       >
         {it.name}
@@ -1766,7 +1759,6 @@ function PreviewCategory({
   theme,
   last = false,
   hideTitle = false,
-  wrap = false,
 }: {
   pc: MenuPageCategory;
   scale: number;
@@ -1777,8 +1769,6 @@ function PreviewCategory({
   last?: boolean;
   /** Suppress the heading — this category continues from an earlier block. */
   hideTitle?: boolean;
-  /** Allow item names to wrap to a 2nd line. */
-  wrap?: boolean;
 }) {
   return (
     <div style={{ marginBottom: last ? 0 : ms.catGap * scale }}>
@@ -1786,7 +1776,7 @@ function PreviewCategory({
         <PreviewCategoryTitle name={pc.name} scale={scale} ms={ms} theme={theme} />
       )}
       {pc.items.map((it) => (
-        <PreviewItemRow key={it.id} it={it} scale={scale} ms={ms} theme={theme} wrap={wrap} />
+        <PreviewItemRow key={it.id} it={it} scale={scale} ms={ms} theme={theme} />
       ))}
     </div>
   );

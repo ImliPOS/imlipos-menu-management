@@ -142,9 +142,10 @@ export default function Menu() {
                   <div className="flex min-w-0 items-center gap-3">
                     <Thumb url={it.mediaUrl} />
                     <span
-                      className={`truncate ${it.isAvailable ? "" : "text-muted-foreground line-through"}`}
+                      className={it.isAvailable ? "" : "text-muted-foreground line-through"}
                     >
-                      {it.name} — ₹{it.price}
+                      {it.name}{" "}
+                      <span className="whitespace-nowrap">— ₹{it.price}</span>
                     </span>
                     {it.isFeatured && (
                       <span

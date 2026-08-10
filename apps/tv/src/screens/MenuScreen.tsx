@@ -503,8 +503,8 @@ function PagedMenu({
 
   const { fixed, cycle } = useMemo(() => {
     if (size.h <= 0) return { fixed: simple, cycle: [] };
-    return paginateMenu(simple, size.h, ms);
-  }, [simple, size.h, ms]);
+    return paginateMenu(simple, size.h, ms, size.w);
+  }, [simple, size.h, size.w, ms]);
 
   // Flatten the cycling categories into one stream of frames; each frame is a
   // single item-page shown under its category's (static) heading. With sliding
@@ -562,7 +562,6 @@ function PagedMenu({
           ms={ms}
           theme={theme}
           hideTitle={hideHeadings?.has(pc.id) ?? false}
-          wrap={!sliding}
         />
       ))}
       {/* Overflowing category — heading static; only the item rows cycle. */}
@@ -593,15 +592,12 @@ function MenuCategoryRows({
   ms,
   theme,
   hideTitle = false,
-  wrap = false,
 }: {
   pc: MenuPageCategory;
   ms: MenuStyle;
   theme: LayoutTheme;
   /** Suppress the heading — this category continues from an earlier block. */
   hideTitle?: boolean;
-  /** Let item names wrap to a 2nd line. */
-  wrap?: boolean;
 }) {
   return (
     <View style={{ marginBottom: ms.catGap }}>
@@ -614,24 +610,23 @@ function MenuCategoryRows({
           {pc.name}
         </Text>
       )}
-      <MenuItemRows items={pc.items} ms={ms} theme={theme} wrap={wrap} />
+      <MenuItemRows items={pc.items} ms={ms} theme={theme} />
     </View>
   );
 }
 
+/** Item rows for both the static/pinned path and the cycling pages. Names are
+ *  never truncated: they wrap to as many lines as needed, and the pagination
+ *  (paginateMenu) reserves matching row heights via the shared Roboto width
+ *  estimator, so the metric-based cycling stays in step with what renders. */
 function MenuItemRows({
   items,
   ms,
   theme,
-  wrap = false,
 }: {
   items: MenuPageItem[];
   ms: MenuStyle;
   theme: LayoutTheme;
-  /** Let the name wrap to a 2nd line (then ellipsise). Only in sliding-off mode,
-   *  where the editor reserved the matching height per item; sliding-on keeps a
-   *  single line so the metric-based cycling pagination stays exact. */
-  wrap?: boolean;
 }) {
   return (
     <>
@@ -639,7 +634,6 @@ function MenuItemRows({
         <View key={it.id} style={[styles.row, { paddingVertical: ms.itemPadV }]}>
           <Text
             style={[styles.item, itemSize(ms), { color: theme.text }]}
-            numberOfLines={wrap ? 2 : 1}
             allowFontScaling={false}
           >
             {it.name}
@@ -698,7 +692,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: 8,
   },
-  // flexShrink lets a long name ellipsise instead of pushing the price off-row.
+  // flexShrink lets a long name wrap in place instead of pushing the price off-row.
   item: { flexShrink: 1, color: "#fff", fontFamily: FONT_REGULAR },
   price: { flexShrink: 0, color: "#fff", fontFamily: FONT_BOLD },
 
