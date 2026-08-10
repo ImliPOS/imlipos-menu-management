@@ -20,13 +20,41 @@ const schema = z.object({
   // Secrets — always set per service in the Render dashboard.
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(16),
   SUPABASE_STORAGE_BUCKET: z.string().default("menu-media"),
-  // Payment gateway for subscription checkout. Widen the enum (and add the
-  // provider's key env vars) when a real gateway lands; 'mock' simulates
-  // payment and enables the dev-only mock-pay endpoint.
-  BILLING_PROVIDER: z.enum(["mock"]).default("mock"),
+  // Payment gateway for subscription checkout. 'mock' simulates payment and
+  // enables the dev-only mock-pay endpoint; 'phonepe' uses PhonePe PG
+  // Standard Checkout v2 (hosted redirect page).
+  BILLING_PROVIDER: z.enum(["mock", "phonepe"]).default("mock"),
+  // PhonePe PG credentials (Business dashboard → Developer Settings). All
+  // required when BILLING_PROVIDER=phonepe. 'sandbox' hits api-preprod.
+  PHONEPE_ENV: z.enum(["sandbox", "production"]).default("sandbox"),
+  PHONEPE_CLIENT_ID: z.string().optional(),
+  PHONEPE_CLIENT_SECRET: z.string().optional(),
+  PHONEPE_CLIENT_VERSION: z.string().default("1"),
+  // Webhook basic-auth pair, as configured on the PhonePe dashboard when
+  // registering the webhook URL (we verify SHA256(username:password)).
+  PHONEPE_WEBHOOK_USERNAME: z.string().optional(),
+  PHONEPE_WEBHOOK_PASSWORD: z.string().optional(),
 });
 
-const parsed = schema.parse(process.env);
+const parsed = schema
+  .superRefine((val, ctx) => {
+    if (val.BILLING_PROVIDER !== "phonepe") return;
+    for (const key of [
+      "PHONEPE_CLIENT_ID",
+      "PHONEPE_CLIENT_SECRET",
+      "PHONEPE_WEBHOOK_USERNAME",
+      "PHONEPE_WEBHOOK_PASSWORD",
+    ] as const) {
+      if (!val[key]) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [key],
+          message: `${key} is required when BILLING_PROVIDER=phonepe`,
+        });
+      }
+    }
+  })
+  .parse(process.env);
 
 // dev branch → dev URLs, main → prod URLs, local → localhost.
 const APP_ENV = resolveAppEnv();
@@ -45,6 +73,12 @@ export const env = {
 export const webOrigins = env.WEB_ORIGIN.split(",")
   .map((o) => o.trim().replace(/\/$/, "")) // tolerate trailing slashes
   .filter(Boolean);
+
+/**
+ * The owner web app's origin — where payment gateways redirect the customer
+ * after checkout. First WEB_ORIGIN entry by convention (web before admin).
+ */
+export const webAppOrigin = webOrigins[0]!;
 
 /** cors `origin` option: allow listed origins (and same-origin/no-origin requests). */
 export const corsOrigin = (

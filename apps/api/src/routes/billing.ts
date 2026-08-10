@@ -3,7 +3,12 @@ import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { checkoutInputSchema } from "@imlipos/contracts";
 import { db, schema } from "../db/client.js";
 import { requireOwner, shopId } from "../middleware/auth.js";
-import { getProvider, fulfillOrder } from "../billing/index.js";
+import {
+  getProvider,
+  fulfillOrder,
+  failOrder,
+  WebhookVerificationError,
+} from "../billing/index.js";
 import { LIVE_STATUSES, getDeviceEntitlement } from "../billing/limits.js";
 import { toOrderJson, toPlanJson } from "../lib/plans.js";
 import { env } from "../env.js";
@@ -18,11 +23,35 @@ billingRouter.use(requireOwner);
 /**
  * Payment gateway webhooks. Mounted separately in index.ts with a raw body
  * parser (signature verification needs the exact bytes) BEFORE express.json.
- * 501 until a real provider is integrated.
+ * The provider verifies auth and normalizes the event; fulfillment/failure is
+ * provider-agnostic and idempotent, so gateway retries are safe.
  */
 export const billingWebhookRouter = Router();
-billingWebhookRouter.post("/:provider", (_req, res) => {
-  res.status(501).json({ error: "Webhooks not implemented" });
+billingWebhookRouter.post("/:provider", async (req, res) => {
+  const provider = getProvider();
+  if (req.params.provider !== provider.name) {
+    return res.status(404).json({ error: "Unknown provider" });
+  }
+  let result;
+  try {
+    result = await provider.handleWebhook(req);
+  } catch (err) {
+    if (err instanceof WebhookVerificationError) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    console.error("[billing] webhook error:", err);
+    // 5xx → the gateway retries later.
+    return res.status(500).json({ error: "Webhook processing failed" });
+  }
+  // Event we don't act on (refunds, still-pending) — acknowledge and move on.
+  if (!result) return res.json({ received: true });
+
+  if (result.outcome === "paid") {
+    await fulfillOrder(result.orderId, result.providerPaymentId);
+  } else {
+    await failOrder(result.orderId, result.providerPaymentId);
+  }
+  res.json({ received: true });
 });
 
 /** Active plans, cheapest first (nulls treated as 0 by coalesce ordering). */
@@ -120,6 +149,31 @@ billingRouter.get("/orders/:id", async (req, res) => {
     )
     .limit(1);
   if (!row) return res.status(404).json({ error: "Order not found" });
+
+  // Pending order + a provider that can be asked directly → reconcile with the
+  // gateway. Covers the customer landing back from the hosted page before the
+  // webhook arrives (and local dev, where webhooks can't reach us at all).
+  const provider = getProvider();
+  if (
+    row.status === "pending" &&
+    row.provider === provider.name &&
+    provider.checkOrderStatus
+  ) {
+    try {
+      const state = await provider.checkOrderStatus(row);
+      if (state === "paid") {
+        const { order } = await fulfillOrder(row.id);
+        return res.json(toOrderJson(order ?? row));
+      }
+      if (state === "failed") {
+        const { order } = await failOrder(row.id);
+        return res.json(toOrderJson(order ?? row));
+      }
+    } catch (err) {
+      // Status check is best-effort; the webhook remains the source of truth.
+      console.error("[billing] order status reconcile failed:", err);
+    }
+  }
   res.json(toOrderJson(row));
 });
 

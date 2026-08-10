@@ -87,6 +87,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         (data.user?.user_metadata?.avatar_url as string | undefined) ?? null,
       );
     });
+    // Back from a payment gateway redirect — jump straight to Billing, which
+    // reads (and strips) the ?billing_order param and confirms the payment.
+    if (new URLSearchParams(window.location.search).has("billing_order")) {
+      setSettings({ open: true, section: "billing" });
+    }
   }, []);
 
   const openSettings = useCallback((section: SettingsSection) => {

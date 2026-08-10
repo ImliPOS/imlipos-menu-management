@@ -231,8 +231,8 @@ export const subscriptions = pgTable(
 
 /**
  * Checkout orders for subscription purchases. Provider-agnostic: `provider`
- * is 'mock' until a real gateway (Razorpay/Stripe) is integrated; the
- * provider's own ids land in providerOrderId/providerPaymentId.
+ * is 'mock' (dev) or 'phonepe'; the gateway's own ids land in
+ * providerOrderId/providerPaymentId.
  */
 export const subscriptionOrders = pgTable(
   "subscription_orders",

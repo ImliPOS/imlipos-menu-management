@@ -17,6 +17,7 @@ type View =
   | { step: "overview" }
   | { step: "confirm" }
   | { step: "paying"; next: CheckoutNext; orderId: string }
+  | { step: "confirming" } // back from the gateway, waiting for order to settle
   | { step: "success" }
   | { step: "failed"; message: string };
 
@@ -69,6 +70,58 @@ export function BillingSection() {
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  // Returning from a hosted checkout page (PhonePe redirects back with
+  // ?billing_order=<id>): strip the param and poll the order until the
+  // webhook — or the API's own gateway reconciliation — settles it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const orderId = params.get("billing_order");
+    if (!orderId) return;
+    params.delete("billing_order");
+    const qs = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      window.location.pathname + (qs ? `?${qs}` : ""),
+    );
+
+    let stale = false;
+    setView({ step: "confirming" });
+    (async () => {
+      try {
+        for (let i = 0; i < 15; i++) {
+          const order = await api.getOrder(orderId);
+          if (stale) return;
+          if (order.status === "paid") {
+            await load();
+            setView({ step: "success" });
+            return;
+          }
+          if (order.status === "failed" || order.status === "cancelled") {
+            setView({
+              step: "failed",
+              message: "The payment was not completed. You have not been charged for this order.",
+            });
+            return;
+          }
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+        if (!stale) {
+          setView({
+            step: "failed",
+            message:
+              "We haven't received payment confirmation yet. If you completed the payment, your licence will activate automatically in a few minutes — check back shortly.",
+          });
+        }
+      } catch (err) {
+        if (!stale) setView({ step: "failed", message: String(err) });
+      }
+    })();
+    return () => {
+      stale = true;
+    };
   }, [load]);
 
   if (!summary || !plan) return <PageSpinner />;
@@ -211,6 +264,21 @@ export function BillingSection() {
         <Button variant="ghost" onClick={() => setView({ step: "overview" })}>
           Cancel
         </Button>
+      </div>
+    );
+  }
+
+  if (view.step === "confirming") {
+    return (
+      <div className="flex flex-col items-center gap-4 py-16 text-center">
+        <Spinner />
+        <div>
+          <h3 className="text-lg font-semibold">Confirming your payment…</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Hang tight — we&apos;re waiting for the payment confirmation from
+            your bank. This usually takes a few seconds.
+          </p>
+        </div>
       </div>
     );
   }

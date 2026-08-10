@@ -60,3 +60,25 @@ export async function fulfillOrder(orderId: string, providerPaymentId?: string) 
     return { order: linked!, subscription: subscription!, alreadyProcessed: false };
   });
 }
+
+/**
+ * Mark an order's payment as failed. Pending-only, same idempotency rule as
+ * fulfillOrder — a late "failed" webhook can never downgrade a paid order.
+ */
+export async function failOrder(orderId: string, providerPaymentId?: string) {
+  const [order] = await db
+    .update(subscriptionOrders)
+    .set({
+      status: "failed",
+      providerPaymentId: providerPaymentId ?? null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(subscriptionOrders.id, orderId),
+        eq(subscriptionOrders.status, "pending"),
+      ),
+    )
+    .returning();
+  return { order: order ?? null };
+}
