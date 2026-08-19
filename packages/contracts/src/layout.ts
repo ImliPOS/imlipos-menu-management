@@ -590,6 +590,15 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
     ],
   },
   {
+    id: "split-lr-p",
+    label: "Split (left / right)",
+    orientation: "portrait",
+    zones: [
+      { x: 0, y: 0, w: 50, h: 100, type: "menu" },
+      { x: 50, y: 0, w: 50, h: 100, type: "menu" },
+    ],
+  },
+  {
     id: "thirds-tb-p",
     label: "3 rows",
     orientation: "portrait",
