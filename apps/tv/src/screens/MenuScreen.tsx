@@ -236,17 +236,28 @@ export function MenuScreen({
   // so it renders upright on the turned display — video and all.
   const wantPortrait = content.orientation === "portrait";
   const panelIsPortrait = panelH > panelW;
-  const rotate = wantPortrait !== panelIsPortrait;
-  const canvasStyle: ViewStyle = rotate
-    ? {
-        position: "absolute",
-        width: panelH, // logical canvas is the panel, swapped
-        height: panelW,
-        top: (panelH - panelW) / 2,
-        left: (panelW - panelH) / 2,
-        transform: [{ rotate: "90deg" }],
-      }
-    : { flex: 1, position: "relative" };
+  const derivedRotation = wantPortrait !== panelIsPortrait ? 90 : 0;
+
+  // The operator can dial in extra rotation from the admin for a panel that is
+  // mounted turned or upside down. It is ADDED to the derived angle rather than
+  // replacing it, so a display that has never been adjusted (no value, or 0)
+  // keeps rendering exactly as it did before this setting existed.
+  const totalRotation = (derivedRotation + (content.rotation ?? 0)) % 360;
+
+  // 90/270 swap the canvas' logical width and height and re-centre it over the
+  // panel; 180 keeps the panel's own dimensions and just flips.
+  const swapped = totalRotation === 90 || totalRotation === 270;
+  const canvasStyle: ViewStyle =
+    totalRotation === 0
+      ? { flex: 1, position: "relative" }
+      : {
+          position: "absolute",
+          width: swapped ? panelH : panelW,
+          height: swapped ? panelW : panelH,
+          top: swapped ? (panelH - panelW) / 2 : 0,
+          left: swapped ? (panelW - panelH) / 2 : 0,
+          transform: [{ rotate: `${totalRotation}deg` }],
+        };
 
   // A category that spills across blocks should print its heading only in the
   // first block it appears in; continuation blocks render the items headingless.

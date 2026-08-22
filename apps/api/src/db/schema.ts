@@ -147,6 +147,11 @@ export const devices = pgTable(
     screenHeight: integer("screen_height"),
     screenScale: real("screen_scale"), // device pixel ratio (dp = px / scale)
     layout: jsonb("layout").$type<DeviceLayout>(),
+    /** Extra clockwise rotation (0/90/180/270) applied on top of the
+     *  orientation-derived one, for panels mounted turned or upside down.
+     *  Nullable with no default: existing displays stay on NULL and render
+     *  exactly as they did before this column existed. */
+    rotation: integer("rotation"),
     hardwareId: text("hardware_id").notNull(),
     pairingCode: text("pairing_code"),
     pairingExpiresAt: timestamp("pairing_expires_at", { withTimezone: true }),
