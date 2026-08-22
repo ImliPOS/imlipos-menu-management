@@ -3,8 +3,21 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Check, PencilIcon, Trash2Icon, X } from "lucide-react";
-import type { Device, Orientation, Screen } from "@imlipos/contracts";
+import {
+  ArrowLeft,
+  Check,
+  PencilIcon,
+  RotateCcw,
+  RotateCw,
+  Trash2Icon,
+  X,
+} from "lucide-react";
+import type {
+  Device,
+  DisplayRotation,
+  Orientation,
+  Screen,
+} from "@imlipos/contracts";
 import { api } from "@/lib/api";
 import { PageSpinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -93,6 +106,14 @@ export default function DeviceDetail() {
   async function setOrientation(orientation: Orientation) {
     if (!screen || screen.orientation === orientation) return;
     await api.updateScreen(screen.id, { orientation });
+    await load();
+  }
+
+  /** Nudge the panel a quarter turn. Rotation is relative to however the
+   *  display renders today, so two taps the same way flips an upside-down TV. */
+  async function rotateBy(delta: 90 | -90) {
+    const next = (((device!.rotation ?? 0) + delta + 360) % 360) as DisplayRotation;
+    await api.updateDeviceRotation(device!.id, next);
     await load();
   }
 
@@ -206,6 +227,9 @@ export default function DeviceDetail() {
             "—"
           )}
         </Detail>
+        <Detail label="Rotation">
+          <RotateControl value={device.rotation ?? 0} onRotate={rotateBy} />
+        </Detail>
         <Detail label="Resolution">
           {device.resolution
             ? `${device.resolution.width}×${device.resolution.height}`
@@ -256,6 +280,56 @@ function OrientationToggle({
           {o}
         </button>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Quarter-turn nudges for a panel that is physically mounted turned or upside
+ * down. 0° means "however this display already renders", so an untouched
+ * display is unaffected.
+ */
+function RotateControl({
+  value,
+  onRotate,
+}: {
+  value: DisplayRotation;
+  onRotate: (delta: 90 | -90) => void | Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  async function go(delta: 90 | -90) {
+    setBusy(true);
+    try {
+      await onRotate(delta);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="mt-0.5 flex items-center gap-2">
+      <div className="inline-flex rounded-md border border-border p-0.5">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void go(-90)}
+          title="Rotate left"
+          aria-label="Rotate left"
+          className="rounded px-2 py-0.5 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+        >
+          <RotateCcw className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void go(90)}
+          title="Rotate right"
+          aria-label="Rotate right"
+          className="rounded px-2 py-0.5 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+        >
+          <RotateCw className="size-3.5" />
+        </button>
+      </div>
+      <span className="text-xs text-muted-foreground">{value}°</span>
     </div>
   );
 }

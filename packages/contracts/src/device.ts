@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isoDate } from "./menu";
-import { deviceLayout, resolution } from "./layout";
+import { deviceLayout, displayRotation, resolution } from "./layout";
 
 export const deviceStatus = z.enum(["pending", "active", "revoked"]);
 export type DeviceStatus = z.infer<typeof deviceStatus>;
@@ -13,6 +13,8 @@ export const deviceSchema = z.object({
   name: z.string().nullable(), // owner-given display name, set at pairing
   resolution: resolution.nullable(), // reported by the device
   layout: deviceLayout.nullable(), // per-device zone layout
+  /** Extra rotation for a physically turned/inverted panel. Null = none. */
+  rotation: displayRotation.nullable(),
   status: deviceStatus,
   lastSeenAt: isoDate.nullable(),
   createdAt: isoDate,
@@ -20,6 +22,10 @@ export const deviceSchema = z.object({
 
 /** Owner sets a device's layout. */
 export const updateLayoutSchema = deviceLayout;
+
+/** Owner corrects how a physically turned/inverted panel renders. */
+export const updateRotationSchema = z.object({ rotation: displayRotation });
+export type UpdateRotationInput = z.infer<typeof updateRotationSchema>;
 export type UpdateLayoutInput = z.infer<typeof updateLayoutSchema>;
 export type Device = z.infer<typeof deviceSchema>;
 

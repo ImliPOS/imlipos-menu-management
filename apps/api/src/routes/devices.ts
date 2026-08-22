@@ -6,6 +6,7 @@ import {
   registerDeviceSchema,
   reportResolutionSchema,
   updateLayoutSchema,
+  updateRotationSchema,
 } from "@imlipos/contracts";
 import { db, schema } from "../db/client.js";
 import { requireOwner, requireDevice, shopId } from "../middleware/auth.js";
@@ -156,6 +157,7 @@ devicesRouter.get("/", requireOwner, async (req, res) => {
       screenHeight: devices.screenHeight,
       screenScale: devices.screenScale,
       layout: devices.layout,
+      rotation: devices.rotation,
       status: devices.status,
       lastSeenAt: devices.lastSeenAt,
       createdAt: devices.createdAt,
@@ -177,6 +179,7 @@ devicesRouter.get("/", requireOwner, async (req, res) => {
             }
           : null,
       layout: r.layout ?? null,
+      rotation: (r.rotation ?? null) as 0 | 90 | 180 | 270 | null,
       status: r.status,
       lastSeenAt: r.lastSeenAt,
       createdAt: r.createdAt,
@@ -272,6 +275,7 @@ devicesRouter.get("/content", requireDevice, async (req, res) => {
       shopId: devices.shopId,
       screenId: devices.screenId,
       layout: devices.layout,
+      rotation: devices.rotation,
     })
     .from(devices)
     .where(eq(devices.id, req.device!.sub))
@@ -295,8 +299,27 @@ devicesRouter.get("/content", requireDevice, async (req, res) => {
     device.layout,
     Date.now(),
     orientation,
+    (device.rotation ?? 0) as 0 | 90 | 180 | 270,
   );
   res.json(content);
+});
+
+/**
+ * Owner: correct how a physically turned/inverted panel renders. This is an
+ * extra rotation layered on the one the TV already derives from orientation,
+ * so 0 restores the pre-existing behaviour rather than forcing upright.
+ */
+devicesRouter.patch("/:id/rotation", requireOwner, async (req, res) => {
+  const parsed = updateRotationSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json(parsed.error.flatten());
+  const [row] = await db
+    .update(devices)
+    .set({ rotation: parsed.data.rotation })
+    .where(and(eq(devices.id, req.params.id), eq(devices.shopId, shopId(req))))
+    .returning({ id: devices.id });
+  if (!row) return res.status(404).json({ error: "Device not found" });
+  emitDeviceRefresh(row.id);
+  res.json({ ok: true, rotation: parsed.data.rotation });
 });
 
 /** Owner: set a device's layout (zones + content). */
