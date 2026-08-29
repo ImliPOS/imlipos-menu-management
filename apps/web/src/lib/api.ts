@@ -11,6 +11,7 @@ import {
   type Item,
   type PairDeviceInput,
   type Screen,
+  type UpdateCategoryInput,
   type UpdateItemInput,
   type DeviceLayout,
   type DisplayRotation,
@@ -65,6 +66,11 @@ export const api = {
   listCategories: () => call<Category[]>("/categories"),
   createCategory: (b: CreateCategoryInput) =>
     call<Category>("/categories", { method: "POST", body: JSON.stringify(b) }),
+  updateCategory: (id: string, b: UpdateCategoryInput) =>
+    call<Category>(`/categories/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(b),
+    }),
   toggleCategory: (id: string, isAvailable: boolean) =>
     call<Category>(`/categories/${id}/availability`, {
       method: "PATCH",
