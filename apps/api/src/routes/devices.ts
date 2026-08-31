@@ -1,7 +1,8 @@
 import { Router } from "express";
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNotNull, sql } from "drizzle-orm";
 import { createHash, randomBytes, randomInt } from "node:crypto";
 import {
+  appearanceTemplate,
   pairDeviceSchema,
   registerDeviceSchema,
   reportResolutionSchema,
@@ -134,6 +135,28 @@ devicesRouter.post("/pair", requireOwner, async (req, res) => {
     });
   }
 
+  // The shop's first-paired configured display (if any) acts as the styling
+  // template: the new display inherits its appearance (theme, font, watermark,
+  // zone geometry, rotation, orientation) but none of its content, so the
+  // operator only assigns categories instead of redoing every setting.
+  const [template] = await db
+    .select({
+      layout: devices.layout,
+      rotation: devices.rotation,
+      orientation: screens.orientation,
+    })
+    .from(devices)
+    .leftJoin(screens, eq(screens.id, devices.screenId))
+    .where(
+      and(
+        eq(devices.shopId, shopId(req)),
+        eq(devices.status, "active"),
+        isNotNull(devices.layout),
+      ),
+    )
+    .orderBy(asc(devices.createdAt))
+    .limit(1);
+
   // Resolve the screen to bind: an existing owner-owned screen, or a freshly
   // auto-created one for this display (the default flow).
   let screenId: string;
@@ -148,7 +171,11 @@ devicesRouter.post("/pair", requireOwner, async (req, res) => {
   } else {
     const [created] = await db
       .insert(screens)
-      .values({ shopId: shopId(req), name: parsed.data.name, orientation: "landscape" })
+      .values({
+        shopId: shopId(req),
+        name: parsed.data.name,
+        orientation: template?.orientation ?? "landscape",
+      })
       .returning({ id: screens.id });
     screenId = created!.id;
   }
@@ -162,6 +189,9 @@ devicesRouter.post("/pair", requireOwner, async (req, res) => {
       status: "active",
       pairingCode: null,
       pairingExpiresAt: null,
+      ...(template?.layout
+        ? { layout: appearanceTemplate(template.layout), rotation: template.rotation }
+        : {}),
     })
     .where(eq(devices.id, device.id));
 
