@@ -337,11 +337,30 @@ export const resolvedZone = z.object({
 });
 export type ResolvedZone = z.infer<typeof resolvedZone>;
 
+/**
+ * Extra rotation the operator dials in from the admin, in degrees clockwise.
+ * This is applied ON TOP OF the orientation-derived rotation the TV already
+ * works out for itself — it is a correction for how the panel is physically
+ * mounted (upside down, or turned the "other" way), not an absolute angle.
+ * Absent / 0 therefore means "render exactly as before".
+ */
+export const displayRotation = z.union([
+  z.literal(0),
+  z.literal(90),
+  z.literal(180),
+  z.literal(270),
+]);
+export type DisplayRotation = z.infer<typeof displayRotation>;
+
 export const deviceContent = z.object({
   zones: z.array(resolvedZone),
   /** Intended display orientation (from the assigned screen). The TV rotates
    *  its whole canvas 90° when this doesn't match the physical panel. */
   orientation: z.enum(["landscape", "portrait"]).default("landscape"),
+  /** Operator-dialled extra rotation, added to the orientation-derived one.
+   *  Optional so snapshots cached before this existed (and any response from an
+   *  API that predates it) simply mean "no extra rotation". */
+  rotation: displayRotation.optional(),
   /** Per-display menu font scale (from the layout). Drives both the rendered
    *  text and the pagination metrics via menuStyle(). */
   fontSize: menuFont.default(MENU_SCALE_DEFAULT),

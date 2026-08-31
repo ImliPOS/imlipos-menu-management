@@ -1,6 +1,6 @@
 {
-  "id": "5895d925-3ce3-4d15-8182-462b374a8c11",
-  "prevId": "b9bff32a-3e8f-4dd2-ae74-80f730f3c4a7",
+  "id": "b9bff32a-3e8f-4dd2-ae74-80f730f3c4a7",
+  "prevId": "d1a0e9ef-ae4a-4990-ab67-73fd80a39cc7",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -958,6 +958,22 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "subscriptions_shop_live_uq": {
+          "name": "subscriptions_shop_live_uq",
+          "columns": [
+            {
+              "expression": "shop_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "status IN ('trialing', 'active')",
           "concurrently": false,
           "method": "btree",
           "with": {}

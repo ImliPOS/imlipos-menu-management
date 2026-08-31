@@ -64,6 +64,7 @@ export async function buildDeviceContent(
   layout: DeviceLayout | null,
   version: number,
   orientation: "landscape" | "portrait" = "landscape",
+  rotation: 0 | 90 | 180 | 270 = 0,
 ): Promise<DeviceContent> {
   if (!layout || layout.zones.length === 0) {
     const assigned = screenId
@@ -83,6 +84,7 @@ export async function buildDeviceContent(
         { id: "default", x: 0, y: 0, w: 100, h: 100, type: "menu", categories: cats },
       ],
       orientation,
+      rotation,
       fontSize: "medium",
       sliding: true,
       theme: DEFAULT_THEME,
@@ -133,6 +135,7 @@ export async function buildDeviceContent(
   return {
     zones,
     orientation,
+    rotation,
     fontSize: layout.fontSize ?? "medium",
     sliding: layout.sliding ?? true,
     theme: { ...DEFAULT_THEME, ...layout.theme },

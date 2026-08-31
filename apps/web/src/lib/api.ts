@@ -16,8 +16,10 @@ import {
   type Plan,
   type Screen,
   type SubscriptionOrder,
+  type UpdateCategoryInput,
   type UpdateItemInput,
   type DeviceLayout,
+  type DisplayRotation,
 } from "@imlipos/contracts";
 
 import { supabase } from "./supabase";
@@ -96,6 +98,11 @@ export const api = {
   listCategories: () => call<Category[]>("/categories"),
   createCategory: (b: CreateCategoryInput) =>
     call<Category>("/categories", { method: "POST", body: JSON.stringify(b) }),
+  updateCategory: (id: string, b: UpdateCategoryInput) =>
+    call<Category>(`/categories/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(b),
+    }),
   toggleCategory: (id: string, isAvailable: boolean) =>
     call<Category>(`/categories/${id}/availability`, {
       method: "PATCH",
@@ -141,6 +148,11 @@ export const api = {
     call<{ ok: true; name: string }>(`/devices/${id}/name`, {
       method: "PATCH",
       body: JSON.stringify({ name }),
+    }),
+  updateDeviceRotation: (id: string, rotation: DisplayRotation) =>
+    call<{ ok: true; rotation: DisplayRotation }>(`/devices/${id}/rotation`, {
+      method: "PATCH",
+      body: JSON.stringify({ rotation }),
     }),
   updateDeviceLayout: (id: string, layout: DeviceLayout) =>
     call<{ ok: true }>(`/devices/${id}/layout`, {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { PlusIcon, Search, Tags, Trash2Icon, X } from "lucide-react";
+import { Pencil, PlusIcon, Search, Tags, Trash2Icon, X } from "lucide-react";
 import type { Category } from "@imlipos/contracts";
 import { api } from "@/lib/api";
 import { PageSpinner } from "@/components/ui/spinner";
@@ -45,6 +45,15 @@ export default function Categories() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  /** Replace an existing category by id, or append a new one. */
+  function upsertCategory(saved: Category) {
+    setCategories((p) =>
+      p.some((c) => c.id === saved.id)
+        ? p.map((c) => (c.id === saved.id ? saved : c))
+        : [...p, saved],
+    );
+  }
 
   async function toggleCategory(cat: Category) {
     const updated = await api.toggleCategory(cat.id, !cat.isAvailable);
@@ -90,7 +99,15 @@ export default function Categories() {
         <p className="text-sm text-muted-foreground">
           {categories.length} categor{categories.length === 1 ? "y" : "ies"}
         </p>
-        <AddCategoryDialog onCreated={(c) => setCategories((p) => [...p, c])} />
+        <CategoryDialog
+          onSaved={upsertCategory}
+          trigger={
+            <Button>
+              <PlusIcon className="size-4" />
+              Add category
+            </Button>
+          }
+        />
       </div>
 
       {categories.length === 0 ? (
@@ -125,6 +142,18 @@ export default function Categories() {
                   onCheckedChange={() => toggleCategory(cat)}
                   aria-label={`Toggle ${cat.name}`}
                 />
+                <CategoryDialog
+                  category={cat}
+                  onSaved={upsertCategory}
+                  trigger={
+                    <button
+                      className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
+                      aria-label={`Rename ${cat.name}`}
+                    >
+                      <Pencil className="size-4" />
+                    </button>
+                  }
+                />
                 <button
                   onClick={() => deleteCategory(cat)}
                   className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-red-400"
@@ -146,18 +175,38 @@ export default function Categories() {
   );
 }
 
-function AddCategoryDialog({ onCreated }: { onCreated: (c: Category) => void }) {
+/** Add (no `category`) or rename (with `category`) a category. */
+function CategoryDialog({
+  category,
+  onSaved,
+  trigger,
+}: {
+  category?: Category;
+  onSaved: (c: Category) => void;
+  trigger: React.ReactNode;
+}) {
+  const editing = !!category;
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const trimmed = name.trim();
+  const unchanged = editing && trimmed === category.name;
+
+  function onOpenChange(next: boolean) {
+    if (next) setName(category?.name ?? "");
+    setOpen(next);
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!trimmed || unchanged) return;
     setBusy(true);
     try {
-      const created = await api.createCategory({ name: name.trim() });
-      onCreated(created);
+      const saved = editing
+        ? await api.updateCategory(category.id, { name: trimmed })
+        : await api.createCategory({ name: trimmed });
+      onSaved(saved);
       setName("");
       setOpen(false);
     } finally {
@@ -166,18 +215,15 @@ function AddCategoryDialog({ onCreated }: { onCreated: (c: Category) => void }) 
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>
-          <PlusIcon className="size-4" />
-          Add category
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add category</DialogTitle>
+          <DialogTitle>{editing ? "Rename category" : "Add category"}</DialogTitle>
           <DialogDescription>
-            Categories group your menu items (e.g. Coffee, Main Course).
+            {editing
+              ? "The new name shows on every display within a moment."
+              : "Categories group your menu items (e.g. Coffee, Main Course)."}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="mt-2 space-y-4">
@@ -199,8 +245,14 @@ function AddCategoryDialog({ onCreated }: { onCreated: (c: Category) => void }) 
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={busy || !name.trim()}>
-              {busy ? "Adding…" : "Add category"}
+            <Button type="submit" disabled={busy || !trimmed || unchanged}>
+              {busy
+                ? editing
+                  ? "Saving…"
+                  : "Adding…"
+                : editing
+                  ? "Save"
+                  : "Add category"}
             </Button>
           </DialogFooter>
         </form>
