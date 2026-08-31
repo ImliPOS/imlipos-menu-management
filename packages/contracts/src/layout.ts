@@ -311,6 +311,29 @@ export const deviceLayout = z.object({
 });
 export type DeviceLayout = z.infer<typeof deviceLayout>;
 
+/** A copy of a layout carrying only its appearance: zone geometry/types and
+ *  styling (theme, font, watermark, sliding, auto-flow), with all content
+ *  (categories, hidden items, media) cleared. Used to seed a newly paired
+ *  display from an already-configured one, so operators don't redo styling
+ *  per screen while each screen still gets its own content assignment. */
+export function appearanceTemplate(src: DeviceLayout): DeviceLayout {
+  return {
+    template: src.template,
+    zones: src.zones.map((z) => ({
+      ...z,
+      categoryIds: [],
+      hiddenItemIds: [],
+      mediaUrl: null,
+      autoFilled: false,
+    })),
+    theme: src.theme,
+    fontSize: src.fontSize,
+    sliding: src.sliding,
+    autoFlow: src.autoFlow,
+    watermark: src.watermark,
+  };
+}
+
 /** Device-reported screen resolution (width/height in physical pixels) plus the
  *  device pixel ratio, so layout-space (dp) can be derived: dp = px / scale.
  *  The TV lays out fonts/padding in dp, so the editor preview must scale to dp. */
