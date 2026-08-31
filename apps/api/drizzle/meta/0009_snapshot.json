@@ -188,6 +188,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "rotation": {
+          "name": "rotation",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
