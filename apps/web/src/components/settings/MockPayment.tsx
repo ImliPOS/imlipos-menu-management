@@ -1,41 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import {
-  CreditCard,
-  Landmark,
-  Lock,
-  Smartphone,
-  SkipForward,
-} from "lucide-react";
+import { CheckCircle2, Lock, SkipForward } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
-import { cn } from "@/lib/utils";
 
-type Method = "upi" | "card" | "netbanking";
-
-const METHODS: { id: Method; label: string; icon: typeof Smartphone }[] = [
-  { id: "upi", label: "UPI", icon: Smartphone },
-  { id: "card", label: "Card", icon: CreditCard },
-  { id: "netbanking", label: "Net banking", icon: Landmark },
-];
-
-/** How long the simulated gateway "processes" before reporting success. */
-const PROCESSING_MS = 1600;
+/** How long the simulated gateway "confirms" before reporting success. */
+const CONFIRMING_MS = 1600;
 
 /**
- * Simulated checkout for the mock billing provider. It walks through the
- * steps a real gateway will show — pick a method, review the amount, pay —
- * so the flow can be demonstrated end to end before a gateway is connected.
+ * Simulated UPI checkout for the mock billing provider: a scan-to-pay QR and
+ * a "Payment done" button, mirroring the pay-by-QR flow a real gateway shows,
+ * so the purchase can be demonstrated end to end before a gateway is live.
  *
- * TEST MODE ONLY: every field is pre-filled with dummy values and read-only,
- * so no real card, UPI or bank details can be typed in, and nothing is sent to
- * any payment network. "Pay" and "Skip payment" both activate the licence via
- * the API's mock-pay endpoint; Skip just does it without the ceremony, so an
- * operator who only wants to pair a display isn't held up.
+ * TEST MODE ONLY: the QR is a static placeholder image that isn't tied to any
+ * payment account, and nothing is sent to any payment network. "Payment done"
+ * and "Skip payment" both activate the licence via the API's mock-pay
+ * endpoint; Skip just does it without the ceremony, so an operator who only
+ * wants to pair a display isn't held up.
  */
 export function MockPayment({
   amountLabel,
@@ -52,19 +35,18 @@ export function MockPayment({
   onSkip: () => Promise<void>;
   onCancel: () => void;
 }) {
-  const [method, setMethod] = useState<Method>("upi");
-  const [processing, setProcessing] = useState(false);
-  const locked = busy || processing;
+  const [confirming, setConfirming] = useState(false);
+  const locked = busy || confirming;
 
-  async function pay() {
-    setProcessing(true);
-    // Hold on the "processing" state briefly so the demo reads like a real
+  async function paymentDone() {
+    setConfirming(true);
+    // Hold on the "confirming" state briefly so the demo reads like a real
     // gateway round-trip rather than an instant flip to success.
-    await new Promise((r) => setTimeout(r, PROCESSING_MS));
+    await new Promise((r) => setTimeout(r, CONFIRMING_MS));
     try {
       await onPay();
     } finally {
-      setProcessing(false);
+      setConfirming(false);
     }
   }
 
@@ -82,81 +64,37 @@ export function MockPayment({
             </span>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            {METHODS.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                type="button"
-                disabled={locked}
-                onClick={() => setMethod(id)}
-                className={cn(
-                  "flex flex-col items-center gap-1.5 rounded-md border px-2 py-3 text-xs font-medium transition-colors",
-                  method === id
-                    ? "border-primary bg-primary/10 text-foreground"
-                    : "border-border text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
-                  locked && "opacity-60",
-                )}
-              >
-                <Icon className="size-4" />
-                {label}
-              </button>
-            ))}
+          <div className="flex flex-col items-center gap-3">
+            <div className="rounded-lg bg-white p-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/mock-payment-qr.png"
+                alt="Sample UPI QR code for the simulated payment"
+                width={200}
+                height={196}
+                className="block h-auto w-[200px] max-w-full"
+              />
+            </div>
+            <p className="text-center text-sm">
+              Scan with any UPI app to pay{" "}
+              <span className="font-medium tabular-nums">{amountLabel}</span>
+            </p>
+            <p className="text-center text-xs text-muted-foreground">
+              Sample QR — it isn&apos;t linked to a payment account. Press
+              “Payment done” to simulate a successful payment.
+            </p>
           </div>
 
-          {method === "upi" && (
-            <div className="space-y-2">
-              <Label htmlFor="mock-upi">UPI ID</Label>
-              <Input id="mock-upi" value="demo@paytm" readOnly />
-              <p className="text-xs text-muted-foreground">
-                Sample UPI ID. In live mode you&apos;ll approve the request in
-                your UPI app.
-              </p>
-            </div>
-          )}
-
-          {method === "card" && (
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label htmlFor="mock-card">Card number</Label>
-                <Input id="mock-card" value="4111 1111 1111 1111" readOnly />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label htmlFor="mock-exp">Expiry</Label>
-                  <Input id="mock-exp" value="12/30" readOnly />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="mock-cvv">CVV</Label>
-                  <Input id="mock-cvv" value="•••" readOnly />
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Sample test card. Real card entry is disabled in test mode.
-              </p>
-            </div>
-          )}
-
-          {method === "netbanking" && (
-            <div className="space-y-2">
-              <Label htmlFor="mock-bank">Bank</Label>
-              <Input id="mock-bank" value="Demo Bank (test)" readOnly />
-              <p className="text-xs text-muted-foreground">
-                In live mode you&apos;ll be redirected to your bank to approve
-                the payment.
-              </p>
-            </div>
-          )}
-
-          <Button className="w-full" disabled={locked} onClick={pay}>
-            {processing ? (
+          <Button className="w-full" disabled={locked} onClick={paymentDone}>
+            {confirming ? (
               <>
-                <Spinner /> Processing payment…
+                <Spinner /> Confirming payment…
               </>
             ) : busy ? (
               <Spinner />
             ) : (
               <>
-                <Lock className="size-4" /> Pay {amountLabel}
+                <CheckCircle2 className="size-4" /> Payment done
               </>
             )}
           </Button>
