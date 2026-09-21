@@ -19,6 +19,7 @@ import * as Updates from "expo-updates";
 import {
   continuationHeadingIds,
   frameContentInset,
+  isUncategorized,
   MENU_BLOCK_PAD,
   menuStyle,
   paginateMenu,
@@ -578,15 +579,18 @@ function PagedMenu({
       {/* Overflowing category — heading static; only the item rows cycle. */}
       {current && (
         <View style={styles.cyclingCategory}>
-          {!hideHeadings?.has(current.catId) && (
-            <Text
-              style={[styles.catTitle, catTitleSize(ms), { color: theme.heading }]}
-              numberOfLines={1}
-              allowFontScaling={false}
-            >
-              {current.name}
-            </Text>
-          )}
+          {!hideHeadings?.has(current.catId) &&
+            (isUncategorized(current.catId) ? (
+              <BlankHeading ms={ms} />
+            ) : (
+              <Text
+                style={[styles.catTitle, catTitleSize(ms), { color: theme.heading }]}
+                numberOfLines={1}
+                allowFontScaling={false}
+              >
+                {current.name}
+              </Text>
+            ))}
           <View style={styles.pagedViewport}>
             <Animated.View style={{ transform: [{ translateX: x }] }}>
               <MenuItemRows items={current.items} ms={ms} theme={theme} />
@@ -612,18 +616,28 @@ function MenuCategoryRows({
 }) {
   return (
     <View style={{ marginBottom: ms.catGap }}>
-      {!hideTitle && (
-        <Text
-          style={[styles.catTitle, catTitleSize(ms), { color: theme.heading }]}
-          numberOfLines={1}
-          allowFontScaling={false}
-        >
-          {pc.name}
-        </Text>
-      )}
+      {!hideTitle &&
+        (isUncategorized(pc.id) ? (
+          <BlankHeading ms={ms} />
+        ) : (
+          <Text
+            style={[styles.catTitle, catTitleSize(ms), { color: theme.heading }]}
+            numberOfLines={1}
+            allowFontScaling={false}
+          >
+            {pc.name}
+          </Text>
+        ))}
       <MenuItemRows items={pc.items} ms={ms} theme={theme} />
     </View>
   );
+}
+
+/** What the uncategorised group prints instead of a heading: one blank item
+ *  row, so its items read as a break after the list above rather than a new
+ *  section. paginateMenu reserves exactly this height (groupHeadHeight). */
+function BlankHeading({ ms }: { ms: MenuStyle }) {
+  return <View style={{ height: ms.itemH }} />;
 }
 
 /** Item rows for both the static/pinned path and the cycling pages. Names are

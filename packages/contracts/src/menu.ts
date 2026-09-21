@@ -3,6 +3,21 @@ import { z } from "zod";
 /** ISO timestamp string. */
 export const isoDate = z.string().datetime();
 
+/** ---- Uncategorised ----
+ *  An item may sit outside every category (`categoryId === null`). For display
+ *  purposes those loose items are gathered into ONE virtual group carrying this
+ *  sentinel id. It flows, paginates and can be picked for a block exactly like a
+ *  real category, but it prints no heading — just a single blank line separating
+ *  it from the items above it. The id is deliberately not a uuid so it can never
+ *  collide with a real category, which is why `categoryIds` on a layout zone is
+ *  a plain string array rather than a uuid array. */
+export const UNCATEGORIZED_ID = "uncategorized";
+/** Operator-facing label for the virtual group (never rendered on a display). */
+export const UNCATEGORIZED_LABEL = "Uncategorised";
+export function isUncategorized(id: string): boolean {
+  return id === UNCATEGORIZED_ID;
+}
+
 /** ---- Category ---- */
 export const categorySchema = z.object({
   id: z.string().uuid(),
@@ -32,7 +47,8 @@ export type MediaType = z.infer<typeof mediaType>;
 export const itemSchema = z.object({
   id: z.string().uuid(),
   shopId: z.string().uuid(),
-  categoryId: z.string().uuid(),
+  /** null = the item belongs to no category (see UNCATEGORIZED_ID). */
+  categoryId: z.string().uuid().nullable(),
   name: z.string().min(1).max(160),
   description: z.string().max(2000).nullable(),
   price: z.number().nonnegative(),
@@ -47,7 +63,8 @@ export const itemSchema = z.object({
 export type Item = z.infer<typeof itemSchema>;
 
 export const createItemSchema = z.object({
-  categoryId: z.string().uuid(),
+  /** Omit or pass null to create the item without a category. */
+  categoryId: z.string().uuid().nullable().optional(),
   name: z.string().min(1).max(160),
   description: z.string().max(2000).nullable().optional(),
   price: z.number().nonnegative(),
@@ -81,7 +98,8 @@ export const menuItemView = z.object({
 export type MenuItemView = z.infer<typeof menuItemView>;
 
 export const menuCategoryView = z.object({
-  id: z.string().uuid(),
+  /** A real category's uuid, or UNCATEGORIZED_ID for the virtual group. */
+  id: z.string(),
   name: z.string(),
   sortOrder: z.number().int(),
   isAvailable: z.boolean(),

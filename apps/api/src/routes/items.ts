@@ -57,7 +57,12 @@ itemsRouter.patch("/:id", async (req, res) => {
   if (!row) return res.status(404).json({ error: "Not found" });
 
   // Name/price/image change → tell screens showing this item to refetch.
-  const screenIds = await screensShowingCategory(shopId(req), row.categoryId);
+  // Screen↔category assignment can't carry an uncategorised item, so a loose
+  // item has no targeted screens; emitShopMenuChanged below still reaches every
+  // display of the shop (which is how layout-driven displays refresh anyway).
+  const screenIds = row.categoryId
+    ? await screensShowingCategory(shopId(req), row.categoryId)
+    : [];
   for (const sid of screenIds) {
     const version = await bumpScreenVersion(sid);
     emitMenuRefresh(sid, { screenId: sid, version });
@@ -77,7 +82,9 @@ itemsRouter.patch("/:id/availability", async (req, res) => {
     .returning();
   if (!row) return res.status(404).json({ error: "Not found" });
 
-  const screenIds = await screensShowingCategory(shopId(req), row.categoryId);
+  const screenIds = row.categoryId
+    ? await screensShowingCategory(shopId(req), row.categoryId)
+    : [];
   for (const sid of screenIds) {
     const version = await bumpScreenVersion(sid);
     emitItemUpdated([sid], {
@@ -98,7 +105,9 @@ itemsRouter.delete("/:id", async (req, res) => {
     .returning({ id: items.id, categoryId: items.categoryId });
   if (!row) return res.status(404).json({ error: "Not found" });
 
-  const screenIds = await screensShowingCategory(shopId(req), row.categoryId);
+  const screenIds = row.categoryId
+    ? await screensShowingCategory(shopId(req), row.categoryId)
+    : [];
   for (const sid of screenIds) {
     const version = await bumpScreenVersion(sid);
     emitMenuRefresh(sid, { screenId: sid, version });

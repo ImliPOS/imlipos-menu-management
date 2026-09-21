@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { menuCategoryView } from "./menu";
+import { isUncategorized, menuCategoryView } from "./menu";
 
 /**
  * Per-device layout: the display is sliced into rectangular zones (in % of the
@@ -16,8 +16,10 @@ export const layoutZone = z.object({
   w: z.number().min(0).max(100),
   h: z.number().min(0).max(100),
   type: zoneType,
-  /** For menu / featured zones: which categories feed this block. */
-  categoryIds: z.array(z.string().uuid()).default([]),
+  /** For menu / featured zones: which categories feed this block. Plain
+   *  strings, not uuids, because the list may also carry UNCATEGORIZED_ID —
+   *  the virtual group of items that belong to no category. */
+  categoryIds: z.array(z.string()).default([]),
   /** For menu / featured zones: items to hide within the selected categories.
    *  Empty (the default) shows every available item — so unticking items is
    *  opt-out, and categories with no explicit choice keep showing everything. */
@@ -878,6 +880,18 @@ export function itemLines(
   return Math.max(1, Math.ceil(nameW / nameCol));
 }
 
+/** Height (dp) reserved above a group's rows. A real category prints a heading
+ *  (titleH); the uncategorised group prints nothing at all but reserves one
+ *  blank item row (itemH), so its items read as a single blank line after the
+ *  list above them. Every fit/pagination path goes through this so the TV, the
+ *  editor preview and the auto-flow distributor reserve identical space. */
+export function groupHeadHeight(
+  id: string,
+  m: { titleH: number; itemH: number },
+): number {
+  return isUncategorized(id) ? m.itemH : m.titleH;
+}
+
 /** Total height (dp) of an item row spanning `lines` lines. */
 export function itemHeight(lines: number, m: { itemLine: number; itemPadV: number }): number {
   return lines * m.itemLine + m.itemPadV * 2;
@@ -933,7 +947,7 @@ export function paginateMenu(
       (sum, it) => sum + itemHeight(itemLines(it, innerWidth, m), m),
       0,
     );
-    const need = sep + m.titleH + itemsH;
+    const need = sep + groupHeadHeight(cat.id, m) + itemsH;
     if (fixedUsed + need > usable) break;
     fixed.push({ id: cat.id, name: cat.name, items: cat.items });
     fixedUsed += need;
@@ -950,7 +964,7 @@ export function paginateMenu(
   const cycle: CyclingCategory[] = rest.map((cat) => ({
     id: cat.id,
     name: cat.name,
-    itemPages: pageItems(cat.items, tailHeight, m, innerWidth),
+    itemPages: pageItems(cat.id, cat.items, tailHeight, m, innerWidth),
   }));
   return { fixed, cycle };
 }
@@ -961,12 +975,13 @@ export function paginateMenu(
  *  (a page always takes ≥1 item, even one taller than the room). Always returns
  *  ≥1 page. */
 function pageItems(
+  catId: string,
   items: MenuPageItem[],
   tailHeight: number,
   m: { titleH: number; itemH: number; itemLine: number; itemPadV: number; itemFont: number; catGap: number },
   innerWidth = 0,
 ): MenuPageItem[][] {
-  const room = tailHeight - m.titleH - m.catGap;
+  const room = tailHeight - groupHeadHeight(catId, m) - m.catGap;
   const pages: MenuPageItem[][] = [];
   let page: MenuPageItem[] = [];
   let used = 0;
@@ -1105,7 +1120,7 @@ function fittingIds(
   let first = true;
   for (const c of cats) {
     if (c.items.length === 0) continue;
-    const headingH = first && firstHeadingHidden ? 0 : m.titleH;
+    const headingH = first && firstHeadingHidden ? 0 : groupHeadHeight(c.id, m);
     const need = (first ? 0 : m.catGap) + headingH;
     if (used + need > innerH) break; // no room even for the heading
     used += need;
