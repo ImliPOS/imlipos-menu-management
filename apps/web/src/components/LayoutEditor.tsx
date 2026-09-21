@@ -21,6 +21,7 @@ import {
   DISPLAY_FRAMES,
   DISPLAY_FRAME_LABELS,
   frameContentInset,
+  isUncategorized,
   MENU_BLOCK_PAD,
   WATERMARK_OPACITY_MAX,
   WATERMARK_OPACITY_MIN,
@@ -37,6 +38,8 @@ import {
   paginateMenu,
   resolveFontScale,
   shownItemIdsForLayout,
+  UNCATEGORIZED_ID,
+  UNCATEGORIZED_LABEL,
   zonesInReadingOrder,
   type Category,
   type Device,
@@ -67,6 +70,19 @@ const BG_PRESETS = ["#000000", "#1c1917", "#0f172a", "#ffffff"];
 const TEXT_PRESETS = ["#ffffff", "#e5e7eb", "#ffd700", "#0a0a0a"];
 const HEADING_PRESETS = ["#ffd700", "#ffffff", "#f97316", "#38bdf8"];
 const DIVIDER_PRESETS = ["#52525b", "#3f3f46", "#ffffff", "#ffd700"];
+
+/** The virtual group of items that belong to no category. Offered in the block
+ *  picker (and fed to the preview / auto-flow) exactly like a real category, but
+ *  it renders no heading — see groupHeadHeight / PreviewCategory. */
+const LOOSE_CATEGORY: Category = {
+  id: UNCATEGORIZED_ID,
+  shopId: "",
+  name: UNCATEGORIZED_LABEL,
+  sortOrder: Number.MAX_SAFE_INTEGER,
+  isAvailable: true,
+  createdAt: "",
+  updatedAt: "",
+};
 
 const ZONE_COLORS: Record<string, string> = {
   menu: "border-sky-500/60 bg-sky-500/10 text-sky-200",
@@ -257,21 +273,33 @@ export function LayoutEditorPanel({
 
   // Available categories / items keyed for the scaled menu preview (matches how
   // the TV resolves a menu zone: categoryIds order, items by sortOrder).
-  const catById = useMemo(
-    () => new Map(categories.map((c) => [c.id, c])),
-    [categories],
-  );
   const itemsByCat = useMemo(() => {
     const m = new Map<string, Item[]>();
     for (const it of items) {
       if (!it.isAvailable) continue;
-      const arr = m.get(it.categoryId) ?? [];
+      // Items with no category all land under the one virtual group.
+      const key = it.categoryId ?? UNCATEGORIZED_ID;
+      const arr = m.get(key) ?? [];
       arr.push(it);
-      m.set(it.categoryId, arr);
+      m.set(key, arr);
     }
     for (const arr of m.values()) arr.sort((a, b) => a.sortOrder - b.sortOrder);
     return m;
   }, [items]);
+
+  // What the block picker offers: the real categories, plus the uncategorised
+  // group when (and only when) the shop actually has loose items.
+  const pickCategories = useMemo(
+    () =>
+      (itemsByCat.get(UNCATEGORIZED_ID)?.length ?? 0) > 0
+        ? [...categories, LOOSE_CATEGORY]
+        : categories,
+    [categories, itemsByCat],
+  );
+  const catById = useMemo(
+    () => new Map(pickCategories.map((c) => [c.id, c])),
+    [pickCategories],
+  );
 
   // Measure rendered text widths (dp) in the same Roboto the preview and TV use,
   // so the fit math can tell whether an item name wraps to a 2nd line. Gated on
@@ -310,7 +338,7 @@ export function LayoutEditorPanel({
   const catalog = useMemo(() => {
     const ms = menuStyle(fontScale);
     const m = new Map<string, FlowCatalogCategory>();
-    for (const c of categories) {
+    for (const c of pickCategories) {
       if (!c.isAvailable) continue;
       m.set(c.id, {
         id: c.id,
@@ -330,7 +358,7 @@ export function LayoutEditorPanel({
       });
     }
     return m;
-  }, [categories, itemsByCat, fontScale, fontsReady, measureText]);
+  }, [pickCategories, itemsByCat, fontScale, fontsReady, measureText]);
 
   // Reconstruct the per-display item exclusions from the saved layout once the
   // catalog is loaded: an assigned category's available items that the saved
@@ -1130,10 +1158,12 @@ export function LayoutEditorPanel({
 
                 {(sel.type === "menu" || sel.type === "featured") && (
                   <ul className="max-h-64 space-y-1 overflow-y-auto">
-                    {categories.length === 0 && (
-                      <li className="text-sm text-muted-foreground">No categories yet.</li>
+                    {pickCategories.length === 0 && (
+                      <li className="text-sm text-muted-foreground">
+                        No categories or items yet.
+                      </li>
                     )}
-                    {categories.map((c) => {
+                    {pickCategories.map((c) => {
                       const enabled = sel.categoryIds.includes(c.id);
                       // A category can be added to multiple blocks; flag when it
                       // already shows in another so the operator can split items.
@@ -1148,6 +1178,11 @@ export function LayoutEditorPanel({
                               onChange={() => toggleCategoryForDisplay(sel.id, c.id)}
                             />
                             {c.name}
+                            {isUncategorized(c.id) && (
+                              <span className="text-xs italic text-muted-foreground opacity-70">
+                                no heading — shown after a blank line
+                              </span>
+                            )}
                             {alsoElsewhere && (
                               <span className="text-xs italic text-muted-foreground opacity-70">
                                 also in another block
@@ -1771,9 +1806,14 @@ function PreviewCategory({
 }) {
   return (
     <div style={{ marginBottom: last ? 0 : ms.catGap * scale }}>
-      {!hideTitle && (
-        <PreviewCategoryTitle name={pc.name} scale={scale} ms={ms} theme={theme} />
-      )}
+      {!hideTitle &&
+        (isUncategorized(pc.id) ? (
+          // Uncategorised items print no heading — just one blank item row, the
+          // same space paginateMenu reserves for them (groupHeadHeight).
+          <div style={{ height: ms.itemH * scale }} />
+        ) : (
+          <PreviewCategoryTitle name={pc.name} scale={scale} ms={ms} theme={theme} />
+        ))}
       {pc.items.map((it) => (
         <PreviewItemRow key={it.id} it={it} scale={scale} ms={ms} theme={theme} />
       ))}

@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import type {
   DeviceContent,
   DeviceLayout,
@@ -7,6 +7,8 @@ import type {
 } from "@imlipos/contracts";
 import {
   DEFAULT_THEME,
+  isUncategorized,
+  UNCATEGORIZED_ID,
   WATERMARK_SIZE_DEFAULT,
   watermarkEligible,
 } from "@imlipos/contracts";
@@ -14,44 +16,79 @@ import { db, schema } from "../db/client.js";
 
 const { categories, items, screenCategories } = schema;
 
-/** Load categories (with items) for a shop, keyed by id. */
+/** Shape a db item row into the view a display renders. */
+function toItemView(i: typeof items.$inferSelect) {
+  return {
+    id: i.id,
+    name: i.name,
+    description: i.description,
+    price: Number(i.price),
+    mediaUrl: i.mediaUrl,
+    mediaType: i.mediaType,
+    isAvailable: i.isAvailable,
+    isFeatured: i.isFeatured,
+    sortOrder: i.sortOrder,
+  };
+}
+
+/** Sort order given to the virtual uncategorised group. It has no row of its
+ *  own to carry one, and blocks render categories in the order the operator
+ *  picked them, so this only matters to consumers that sort by it — where the
+ *  loose items belong last. */
+const UNCATEGORIZED_SORT = 1_000_000;
+
+/** Load categories (with items) for a shop, keyed by id. `categoryIds` may
+ *  contain UNCATEGORIZED_ID, which resolves to a headless group holding every
+ *  item of the shop that has no category. */
 async function loadCategories(
   shopId: string,
   categoryIds: string[],
 ): Promise<Map<string, MenuCategoryView>> {
   if (categoryIds.length === 0) return new Map();
-  const cats = await db
-    .select()
-    .from(categories)
-    .where(and(eq(categories.shopId, shopId), inArray(categories.id, categoryIds)));
-  const its = await db
-    .select()
-    .from(items)
-    .where(inArray(items.categoryId, categoryIds))
-    .orderBy(asc(items.sortOrder));
+  const realIds = categoryIds.filter((id) => !isUncategorized(id));
+  const wantsLoose = realIds.length !== categoryIds.length;
 
   const map = new Map<string, MenuCategoryView>();
-  for (const c of cats) {
-    map.set(c.id, {
-      id: c.id,
-      name: c.name,
-      sortOrder: c.sortOrder,
-      isAvailable: c.isAvailable,
-      items: its
-        .filter((i) => i.categoryId === c.id)
-        .map((i) => ({
-          id: i.id,
-          name: i.name,
-          description: i.description,
-          price: Number(i.price),
-          mediaUrl: i.mediaUrl,
-          mediaType: i.mediaType,
-          isAvailable: i.isAvailable,
-          isFeatured: i.isFeatured,
-          sortOrder: i.sortOrder,
-        })),
+
+  if (realIds.length > 0) {
+    const cats = await db
+      .select()
+      .from(categories)
+      .where(and(eq(categories.shopId, shopId), inArray(categories.id, realIds)));
+    const its = await db
+      .select()
+      .from(items)
+      .where(inArray(items.categoryId, realIds))
+      .orderBy(asc(items.sortOrder));
+
+    for (const c of cats) {
+      map.set(c.id, {
+        id: c.id,
+        name: c.name,
+        sortOrder: c.sortOrder,
+        isAvailable: c.isAvailable,
+        items: its.filter((i) => i.categoryId === c.id).map(toItemView),
+      });
+    }
+  }
+
+  if (wantsLoose) {
+    const loose = await db
+      .select()
+      .from(items)
+      .where(and(eq(items.shopId, shopId), isNull(items.categoryId)))
+      .orderBy(asc(items.sortOrder));
+    // Empty name = no heading on the display; the renderer leaves one blank
+    // line in its place so the group reads as a continuation of the list above.
+    map.set(UNCATEGORIZED_ID, {
+      id: UNCATEGORIZED_ID,
+      name: "",
+      sortOrder: UNCATEGORIZED_SORT,
+      isAvailable: true,
+      items: loose.map(toItemView),
     });
   }
+
   return map;
 }
 
