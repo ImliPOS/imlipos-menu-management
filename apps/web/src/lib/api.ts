@@ -169,10 +169,10 @@ export const api = {
   billingSummary: () => call<OwnerBillingSummary>("/billing/subscription"),
   billingUsage: () => call<BillingUsage>("/billing/usage"),
   billingOrders: () => call<SubscriptionOrder[]>("/billing/orders"),
-  checkout: (planId: string) =>
+  checkout: (planId: string, quantity = 1) =>
     call<CheckoutResponse>("/billing/checkout", {
       method: "POST",
-      body: JSON.stringify({ planId }),
+      body: JSON.stringify({ planId, quantity }),
     }),
   getOrder: (id: string) => call<SubscriptionOrder>(`/billing/orders/${id}`),
   mockPay: (orderId: string) =>

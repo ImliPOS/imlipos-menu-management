@@ -255,6 +255,8 @@ export const subscriptionOrders = pgTable(
     /** Snapshot of the plan price at checkout time. */
     amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
     currency: text("currency").notNull().default("INR"),
+    /** Licences bought in this order; `amount` is the total for all of them. */
+    quantity: integer("quantity").notNull().default(1),
     status: orderStatusEnum("status").notNull().default("pending"),
     provider: text("provider").notNull(),
     providerOrderId: text("provider_order_id"),
