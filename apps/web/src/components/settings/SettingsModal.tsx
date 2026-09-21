@@ -7,7 +7,9 @@ import {
   SlidersHorizontal,
   UserRound,
 } from "lucide-react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { POLICY_LINKS } from "@/components/legal/PublicFooter";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { PersonalInfo } from "@/components/profile/PersonalInfo";
@@ -90,19 +92,40 @@ export function SettingsModal({
           ))}
         </nav>
 
-        <div className="min-w-0 flex-1 overflow-y-auto p-6 md:p-8">
-          {section === "general" && <PersonalInfo />}
-          {section === "account" && (
-            <div>
-              <EmailPassword />
-              <Separator className="my-8" />
-              <ShopSettings />
-              <Separator className="my-8" />
-              <DangerZone />
-            </div>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 overflow-y-auto p-6 md:p-8">
+            {section === "general" && <PersonalInfo />}
+            {section === "account" && (
+              <div>
+                <EmailPassword />
+                <Separator className="my-8" />
+                <ShopSettings />
+                <Separator className="my-8" />
+                <DangerZone />
+              </div>
+            )}
+            {section === "billing" && <BillingSection />}
+            {section === "usage" && <UsageSection />}
+          </div>
+
+          {/* Policy links pinned to the bottom-right of the Billing pane, as
+              payment-gateway review expects them next to any purchase step.
+              New tab, so the modal (and any checkout in progress) stays put. */}
+          {section === "billing" && (
+            <nav className="flex shrink-0 flex-wrap justify-end gap-x-5 gap-y-1 border-t border-border px-6 py-3 text-xs text-muted-foreground md:px-8">
+              {POLICY_LINKS.map(({ href, label }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="transition-colors hover:text-foreground"
+                >
+                  {label}
+                </Link>
+              ))}
+            </nav>
           )}
-          {section === "billing" && <BillingSection />}
-          {section === "usage" && <UsageSection />}
         </div>
       </DialogContent>
     </Dialog>
