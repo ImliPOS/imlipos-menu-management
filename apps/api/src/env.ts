@@ -20,6 +20,10 @@ const schema = z.object({
   // Secrets — always set per service in the Render dashboard.
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(16),
   SUPABASE_STORAGE_BUCKET: z.string().default("menu-media"),
+  // Payment gateway for subscription checkout. Widen the enum (and add the
+  // provider's key env vars) when a real gateway lands; 'mock' simulates
+  // payment and enables the dev-only mock-pay endpoint.
+  BILLING_PROVIDER: z.enum(["mock"]).default("mock"),
 });
 
 const parsed = schema.parse(process.env);

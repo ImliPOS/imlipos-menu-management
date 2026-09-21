@@ -51,7 +51,7 @@ export function PersonalInfo() {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-10 lg:grid-cols-3">
+    <div className="space-y-6">
       <div className="flex flex-col space-y-1">
         <h3 className="font-semibold">Personal Information</h3>
         <p className="text-sm text-muted-foreground">
@@ -59,7 +59,7 @@ export function PersonalInfo() {
         </p>
       </div>
 
-      <div className="space-y-6 lg:col-span-2">
+      <div className="space-y-6">
         <div className="space-y-2">
           <Label>Your avatar</Label>
           <div className="flex items-center gap-4">
