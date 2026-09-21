@@ -45,7 +45,7 @@ export function EmailPassword() {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-10 lg:grid-cols-3">
+    <div className="space-y-6">
       <div className="flex flex-col space-y-1">
         <h3 className="font-semibold">Email &amp; Password</h3>
         <p className="text-sm text-muted-foreground">
@@ -53,7 +53,7 @@ export function EmailPassword() {
         </p>
       </div>
 
-      <form onSubmit={save} className="space-y-6 lg:col-span-2">
+      <form onSubmit={save} className="space-y-6">
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
           <div className="relative">

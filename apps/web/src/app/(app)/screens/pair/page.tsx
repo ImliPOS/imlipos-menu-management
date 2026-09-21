@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { PlusIcon, Tv } from "lucide-react";
-import type { Device, Screen } from "@imlipos/contracts";
-import { api } from "@/lib/api";
+import { PlusIcon, Sparkles, Tv } from "lucide-react";
+import type { BillingUsage, Device, Screen } from "@imlipos/contracts";
+import { api, apiErrorCode, ApiError } from "@/lib/api";
+import { useSettingsModal } from "@/components/settings/SettingsModalContext";
 import { PageSpinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +25,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 
 const isOnline = (d: Device) =>
@@ -33,17 +33,26 @@ const isOnline = (d: Device) =>
 export default function PairDevice() {
   const [screens, setScreens] = useState<Screen[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
+  const [usage, setUsage] = useState<BillingUsage | null>(null);
+  const [pairOpen, setPairOpen] = useState(false);
+  const [limitHit, setLimitHit] = useState<{ active: number; limit: number } | null>(null);
   const [loading, setLoading] = useState(true);
+  const { openSettings } = useSettingsModal();
 
   async function loadDevices() {
     setDevices(await api.listDevices());
   }
 
+  async function loadUsage() {
+    setUsage(await api.billingUsage());
+  }
+
   useEffect(() => {
-    Promise.all([api.listScreens(), api.listDevices()])
-      .then(([s, d]) => {
+    Promise.all([api.listScreens(), api.listDevices(), api.billingUsage()])
+      .then(([s, d, u]) => {
         setScreens(s);
         setDevices(d);
+        setUsage(u);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -70,9 +79,67 @@ export default function PairDevice() {
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" />
             live
           </span>
+          {usage && (
+            <span className="ml-2 text-xs text-muted-foreground">
+              Licences: {usage.devices.active} / {usage.devices.limit} used
+            </span>
+          )}
         </div>
-        <PairDeviceDialog onPaired={loadDevices} />
+        {/* Gate at the button: without a spare licence, prompt to buy instead
+            of opening the pairing form. The API also enforces this on submit. */}
+        <Button
+          onClick={() => {
+            const active = usage?.devices.active ?? 0;
+            const limit = usage?.devices.limit ?? 0;
+            if (active >= limit) setLimitHit({ active, limit });
+            else setPairOpen(true);
+          }}
+        >
+          <PlusIcon className="size-4" />
+          Pair Display
+        </Button>
+        <PairDeviceDialog
+          open={pairOpen}
+          onOpenChange={setPairOpen}
+          onPaired={() => {
+            loadDevices();
+            loadUsage().catch(() => {});
+          }}
+          onLimit={setLimitHit}
+        />
       </div>
+
+      {/* Shown when pairing is rejected: no spare display licence. */}
+      <Dialog open={!!limitHit} onOpenChange={(o) => !o && setLimitHit(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {limitHit?.limit === 0
+                ? "You need a display licence"
+                : "No spare licence"}
+            </DialogTitle>
+            <DialogDescription>
+              {limitHit?.limit === 0
+                ? "Each display needs its own licence. Buy a licence to pair this display."
+                : `All ${limitHit?.limit} of your display licences are in use (${limitHit?.active} paired). Buy another licence to pair one more display.`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLimitHit(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setLimitHit(null);
+                openSettings("billing");
+              }}
+            >
+              <Sparkles className="size-4" />
+              Buy a licence
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {paired.length === 0 ? (
         <p className="text-sm text-muted-foreground">
@@ -93,8 +160,17 @@ export default function PairDevice() {
   );
 }
 
-function PairDeviceDialog({ onPaired }: { onPaired: () => void }) {
-  const [open, setOpen] = useState(false);
+function PairDeviceDialog({
+  open,
+  onOpenChange,
+  onPaired,
+  onLimit,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onPaired: () => void;
+  onLimit: (info: { active: number; limit: number }) => void;
+}) {
   const [pairingCode, setPairingCode] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -109,22 +185,25 @@ function PairDeviceDialog({ onPaired }: { onPaired: () => void }) {
       onPaired();
       setPairingCode("");
       setName("");
-      setOpen(false);
-    } catch {
-      setError("Invalid or expired code.");
+      onOpenChange(false);
+    } catch (err) {
+      if (apiErrorCode(err) === "DEVICE_LIMIT") {
+        const body = (err as ApiError).body as { active: number; limit: number };
+        // Reset the form so a retry after buying a licence starts clean.
+        setPairingCode("");
+        setName("");
+        onOpenChange(false);
+        onLimit({ active: body.active, limit: body.limit });
+      } else {
+        setError("Invalid or expired code.");
+      }
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>
-          <PlusIcon className="size-4" />
-          Pair Display
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Pair a Display</DialogTitle>
@@ -171,7 +250,11 @@ function PairDeviceDialog({ onPaired }: { onPaired: () => void }) {
           </div>
           {error && <p className="text-sm text-red-400">{error}</p>}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
               Cancel
             </Button>
             <Button

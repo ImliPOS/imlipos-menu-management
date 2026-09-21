@@ -4,6 +4,8 @@ export * from "./device";
 export * from "./socket";
 export * from "./layout";
 export * from "./env";
+export * from "./admin";
+export * from "./billing";
 
 /** Auth token claim shapes shared across services. */
 export interface OwnerClaims {

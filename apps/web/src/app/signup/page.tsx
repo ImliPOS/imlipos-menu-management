@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { AuthPanel, type AuthValues } from "@/components/ui/sign-in";
+import { PublicFooter } from "@/components/legal/PublicFooter";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -35,19 +36,22 @@ export default function SignUpPage() {
   }
 
   return (
-    <AuthPanel
-      title={<span className="font-light tracking-tighter">Create your account</span>}
-      description="Set up ImliPos to run your cafe’s digital menus."
-      mode="signup"
-      heroVideoSrc="/auth-hero.mp4"
-      submitLabel="Create account"
-      busy={busy}
-      error={error}
-      notice={notice}
-      footerPrompt="Already have an account?"
-      footerActionLabel="Sign in"
-      onFooterAction={() => router.push("/signin")}
-      onSubmit={onSubmit}
-    />
+    <div className="flex min-h-[100dvh] flex-col">
+      <AuthPanel
+        title={<span className="font-light tracking-tighter">Create your account</span>}
+        description="Set up ImliPos to run your cafe’s digital menus."
+        mode="signup"
+        heroVideoSrc="/auth-hero.mp4"
+        submitLabel="Create account"
+        busy={busy}
+        error={error}
+        notice={notice}
+        footerPrompt="Already have an account?"
+        footerActionLabel="Sign in"
+        onFooterAction={() => router.push("/signin")}
+        onSubmit={onSubmit}
+      />
+      <PublicFooter />
+    </div>
   );
 }

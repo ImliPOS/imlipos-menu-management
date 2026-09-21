@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { AuthPanel } from "@/components/ui/sign-in";
+import { PublicFooter } from "@/components/legal/PublicFooter";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -20,17 +21,20 @@ export default function SignInPage() {
   }
 
   return (
-    <AuthPanel
-      title={<span className="font-light tracking-tighter">Welcome back</span>}
-      description="Sign in to manage your menus and screens."
-      heroVideoSrc="/auth-hero.mp4"
-      submitLabel="Sign in"
-      busy={busy}
-      error={error}
-      footerPrompt="New to ImliPos?"
-      footerActionLabel="Create an account"
-      onFooterAction={() => router.push("/signup")}
-      onSubmit={onSubmit}
-    />
+    <div className="flex min-h-[100dvh] flex-col">
+      <AuthPanel
+        title={<span className="font-light tracking-tighter">Welcome back</span>}
+        description="Sign in to manage your menus and screens."
+        heroVideoSrc="/auth-hero.mp4"
+        submitLabel="Sign in"
+        busy={busy}
+        error={error}
+        footerPrompt="New to ImliPos?"
+        footerActionLabel="Create an account"
+        onFooterAction={() => router.push("/signup")}
+        onSubmit={onSubmit}
+      />
+      <PublicFooter />
+    </div>
   );
 }
