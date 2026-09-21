@@ -28,7 +28,7 @@ type View =
  * the licence activated straight away with no payment UI, so nothing stands
  * between an operator and pairing a display until a real gateway is live.
  */
-const DEMO_CHECKOUT_EMAIL = "imlidemomenu1@gmail.com";
+const DEMO_CHECKOUT_EMAIL = "imlimenudemo1@gmail.com";
 
 function priceLabel(plan: Plan) {
   return plan.priceMonthly == null || plan.priceMonthly === 0
