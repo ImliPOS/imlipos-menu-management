@@ -150,13 +150,18 @@ billingRouter.post("/checkout", async (req, res) => {
       ),
     );
 
-  const amount = plan.priceMonthly ?? "0.00";
+  // Total for the whole order: unit price × licences. numeric columns travel
+  // as strings, so compute in paise-safe integer math and format back.
+  const { quantity } = parsed.data;
+  const unitPaise = Math.round(Number(plan.priceMonthly ?? "0") * 100);
+  const amount = ((unitPaise * quantity) / 100).toFixed(2);
   const [order] = await db
     .insert(subscriptionOrders)
     .values({
       shopId: sid,
       planId: plan.id,
       amount,
+      quantity,
       provider: provider.name,
     })
     .returning();
