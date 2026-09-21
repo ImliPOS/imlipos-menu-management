@@ -9,9 +9,11 @@ import type {
 } from "@imlipos/contracts";
 import { BadgeCheck, CircleAlert, MonitorSmartphone } from "lucide-react";
 import { api } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageSpinner, Spinner } from "@/components/ui/spinner";
+import { MockPayment } from "./MockPayment";
 
 type View =
   | { step: "overview" }
@@ -19,6 +21,14 @@ type View =
   | { step: "paying"; next: CheckoutNext; orderId: string }
   | { step: "success" }
   | { step: "failed"; message: string };
+
+/**
+ * The one account that sees the simulated checkout screen (used to walk
+ * payment-gateway reviewers through the purchase flow). Everyone else gets
+ * the licence activated straight away with no payment UI, so nothing stands
+ * between an operator and pairing a display until a real gateway is live.
+ */
+const DEMO_CHECKOUT_EMAIL = "imlidemomenu1@gmail.com";
 
 function priceLabel(plan: Plan) {
   return plan.priceMonthly == null || plan.priceMonthly === 0
@@ -52,6 +62,17 @@ export function BillingSection() {
   const [orders, setOrders] = useState<SubscriptionOrder[]>([]);
   const [view, setView] = useState<View>({ step: "overview" });
   const [busy, setBusy] = useState(false);
+  // null until the session is read; only the demo account sees the mock
+  // checkout screen.
+  const [demoCheckout, setDemoCheckout] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setDemoCheckout(
+        (data.user?.email ?? "").toLowerCase() === DEMO_CHECKOUT_EMAIL,
+      );
+    });
+  }, []);
 
   const load = useCallback(() => {
     return Promise.all([
@@ -71,7 +92,20 @@ export function BillingSection() {
     load();
   }, [load]);
 
-  if (!summary || !plan) return <PageSpinner />;
+  if (!summary || demoCheckout === null) return <PageSpinner />;
+  if (!plan) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col space-y-1">
+          <h3 className="font-semibold">Billing</h3>
+          <p className="text-sm text-muted-foreground">
+            No display licence plans are available right now. Please check
+            back later or contact support.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   async function startCheckout() {
     if (!plan) return;
@@ -83,8 +117,12 @@ export function BillingSection() {
         setView({ step: "success" });
       } else if (next.kind === "redirect") {
         window.location.assign(next.url);
+      } else if (next.kind === "mock" && !demoCheckout) {
+        // No gateway yet: activate the licence at once for regular accounts.
+        await completeMockPayment(order.id);
       } else {
-        // "mock" today; a gateway SDK popup ("client") plugs in here later.
+        // Demo account sees the simulated checkout; a gateway SDK popup
+        // ("client") plugs in here later.
         setView({ step: "paying", next, orderId: order.id });
       }
     } catch (err) {
@@ -126,7 +164,9 @@ export function BillingSection() {
         <div className="flex flex-col space-y-1">
           <h3 className="font-semibold">Buy a display licence</h3>
           <p className="text-sm text-muted-foreground">
-            Review your order before continuing to payment.
+            {demoCheckout
+              ? "Review your order before continuing to payment."
+              : "Review your order before activating the licence."}
           </p>
         </div>
         <Card>
@@ -167,7 +207,13 @@ export function BillingSection() {
             Back
           </Button>
           <Button disabled={busy} onClick={startCheckout}>
-            {busy ? <Spinner /> : "Continue to payment"}
+            {busy ? (
+              <Spinner />
+            ) : demoCheckout ? (
+              "Continue to payment"
+            ) : (
+              "Activate licence"
+            )}
           </Button>
         </div>
       </div>
@@ -184,33 +230,30 @@ export function BillingSection() {
           </p>
         </div>
         {view.next.kind === "mock" ? (
-          <Card>
-            <CardContent className="space-y-4">
-              <p className="text-sm">
-                <span className="font-medium">Simulated payment (dev).</span> No
-                payment gateway is connected yet — this completes the order as if
-                the payment succeeded.
-              </p>
-              <Button
-                disabled={busy}
-                onClick={() => completeMockPayment(view.orderId)}
-              >
-                {busy ? <Spinner /> : "Complete mock payment"}
-              </Button>
-            </CardContent>
-          </Card>
+          // Simulated checkout: "Pay" walks through a gateway-style flow,
+          // "Skip payment" activates the licence at once. Both end in mock-pay.
+          <MockPayment
+            amountLabel={priceLabel(plan)}
+            description={`${plan.name} · 1 display licence`}
+            busy={busy}
+            onPay={() => completeMockPayment(view.orderId)}
+            onSkip={() => completeMockPayment(view.orderId)}
+            onCancel={() => setView({ step: "overview" })}
+          />
         ) : (
-          <Card>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Opening payment provider…
-              </p>
-            </CardContent>
-          </Card>
+          <>
+            <Card>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Opening payment provider…
+                </p>
+              </CardContent>
+            </Card>
+            <Button variant="ghost" onClick={() => setView({ step: "overview" })}>
+              Cancel
+            </Button>
+          </>
         )}
-        <Button variant="ghost" onClick={() => setView({ step: "overview" })}>
-          Cancel
-        </Button>
       </div>
     );
   }
