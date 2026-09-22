@@ -32,6 +32,19 @@ export const subscriptionOrderSchema = z.object({
 });
 export type SubscriptionOrder = z.infer<typeof subscriptionOrderSchema>;
 
+/**
+ * ---- Licence enforcement scope ----
+ * Until a real payment gateway is live, licences are only enforced for the
+ * demo account used to walk payment-gateway reviewers through the purchase
+ * flow. Every other shop keeps the original process: pair displays directly,
+ * with no licence prompt and no limit. Shared by the API (which rejects a
+ * pairing at the limit) and the web app (which shows the buy prompt).
+ */
+export const LICENCE_DEMO_EMAIL = "imlimenudemo1@gmail.com";
+export function licenceEnforcedFor(email: string | null | undefined): boolean {
+  return (email ?? "").trim().toLowerCase() === LICENCE_DEMO_EMAIL;
+}
+
 /** Most licences one checkout may buy — keeps a fat-fingered stepper sane. */
 export const MAX_LICENCE_QUANTITY = 50;
 

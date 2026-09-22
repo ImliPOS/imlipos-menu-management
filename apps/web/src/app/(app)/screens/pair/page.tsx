@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PlusIcon, Sparkles, Tv } from "lucide-react";
 import type { BillingUsage, Device, Screen } from "@imlipos/contracts";
+import { licenceEnforcedFor } from "@imlipos/contracts";
+import { supabase } from "@/lib/supabase";
 import { api, apiErrorCode, ApiError } from "@/lib/api";
 import { useSettingsModal } from "@/components/settings/SettingsModalContext";
 import { PageSpinner } from "@/components/ui/spinner";
@@ -37,6 +39,9 @@ export default function PairDevice() {
   const [pairOpen, setPairOpen] = useState(false);
   const [limitHit, setLimitHit] = useState<{ active: number; limit: number } | null>(null);
   const [loading, setLoading] = useState(true);
+  // Licences are enforced for the demo account only (see licenceEnforcedFor);
+  // everyone else pairs directly with no licence prompt. null until known.
+  const [enforced, setEnforced] = useState<boolean | null>(null);
   const { openSettings } = useSettingsModal();
 
   async function loadDevices() {
@@ -48,6 +53,10 @@ export default function PairDevice() {
   }
 
   useEffect(() => {
+    supabase.auth
+      .getUser()
+      .then(({ data }) => setEnforced(licenceEnforcedFor(data.user?.email)))
+      .catch(() => setEnforced(false));
     Promise.all([api.listScreens(), api.listDevices(), api.billingUsage()])
       .then(([s, d, u]) => {
         setScreens(s);
@@ -79,16 +88,18 @@ export default function PairDevice() {
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" />
             live
           </span>
-          {usage && (
+          {enforced && usage && (
             <span className="ml-2 text-xs text-muted-foreground">
               Licences: {usage.devices.active} / {usage.devices.limit} used
             </span>
           )}
         </div>
-        {/* Gate at the button: without a spare licence, prompt to buy instead
-            of opening the pairing form. The API also enforces this on submit. */}
+        {/* Demo account only: without a spare licence, prompt to buy instead
+            of opening the pairing form (the API enforces this on submit too).
+            Everyone else goes straight to the pairing form. */}
         <Button
           onClick={() => {
+            if (!enforced) return setPairOpen(true);
             const active = usage?.devices.active ?? 0;
             const limit = usage?.devices.limit ?? 0;
             if (active >= limit) setLimitHit({ active, limit });

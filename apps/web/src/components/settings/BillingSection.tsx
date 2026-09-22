@@ -7,7 +7,7 @@ import type {
   Plan,
   SubscriptionOrder,
 } from "@imlipos/contracts";
-import { MAX_LICENCE_QUANTITY } from "@imlipos/contracts";
+import { licenceEnforcedFor, MAX_LICENCE_QUANTITY } from "@imlipos/contracts";
 import { BadgeCheck, CircleAlert, Minus, MonitorSmartphone, Plus } from "lucide-react";
 import { api } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
@@ -22,14 +22,6 @@ type View =
   | { step: "paying"; next: CheckoutNext; orderId: string }
   | { step: "success" }
   | { step: "failed"; message: string };
-
-/**
- * The one account that sees the simulated checkout screen (used to walk
- * payment-gateway reviewers through the purchase flow). Everyone else gets
- * the licence activated straight away with no payment UI, so nothing stands
- * between an operator and pairing a display until a real gateway is live.
- */
-const DEMO_CHECKOUT_EMAIL = "imlimenudemo1@gmail.com";
 
 function priceLabel(plan: Plan) {
   return plan.priceMonthly == null || plan.priceMonthly === 0
@@ -81,9 +73,9 @@ export function BillingSection() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      setDemoCheckout(
-        (data.user?.email ?? "").toLowerCase() === DEMO_CHECKOUT_EMAIL,
-      );
+      // Same account the API enforces licences for; it alone sees the
+      // simulated checkout. Everyone else activates at once with no payment UI.
+      setDemoCheckout(licenceEnforcedFor(data.user?.email));
     });
   }, []);
 
