@@ -8,6 +8,8 @@ import { supabaseAdmin } from "../lib/supabase.js";
 export interface AuthUser {
   userId: string;
   email: string | null;
+  /** From Supabase app_metadata.role — e.g. "super_admin". */
+  role: string | null;
 }
 
 // Small in-memory cache so we don't hit Supabase on every request.
@@ -21,7 +23,12 @@ export async function verifySupabaseToken(token: string): Promise<AuthUser> {
   const { data, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !data.user) throw new Error("Invalid Supabase token");
 
-  const user: AuthUser = { userId: data.user.id, email: data.user.email ?? null };
+  const metaRole = data.user.app_metadata?.role;
+  const user: AuthUser = {
+    userId: data.user.id,
+    email: data.user.email ?? null,
+    role: typeof metaRole === "string" ? metaRole : null,
+  };
   userCache.set(token, { user, exp: Date.now() + CACHE_MS });
   return user;
 }

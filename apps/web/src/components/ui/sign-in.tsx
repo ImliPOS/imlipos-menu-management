@@ -39,6 +39,8 @@ interface AuthPanelProps {
   busy?: boolean;
   error?: string | null;
   notice?: string | null;
+  /** Optional banner rendered between the description and the form. */
+  banner?: React.ReactNode;
   /** Footer link prompt + label + handler (e.g. switch to sign-up). */
   footerPrompt: string;
   footerActionLabel: string;
@@ -85,6 +87,7 @@ export const AuthPanel: React.FC<AuthPanelProps> = ({
   busy = false,
   error,
   notice,
+  banner,
   footerPrompt,
   footerActionLabel,
   onFooterAction,
@@ -152,6 +155,8 @@ export const AuthPanel: React.FC<AuthPanelProps> = ({
             <p className="animate-element animate-delay-200 text-muted-foreground">
               {description}
             </p>
+
+            {banner}
 
             <form className="space-y-5" onSubmit={handleSubmit}>
               {isSignup && (

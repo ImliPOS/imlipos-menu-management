@@ -17,6 +17,8 @@ export interface AppUrls {
   apiUrl: string;
   /** Web app origin (Vercel) — used by the API for CORS. */
   webOrigin: string;
+  /** Super-admin console origin (Vercel) — used by the API for CORS. */
+  adminOrigin: string;
   /** Supabase project URL (Auth + Storage). */
   supabaseUrl: string;
 }
@@ -25,17 +27,20 @@ const URLS: Record<AppEnv, AppUrls> = {
   local: {
     apiUrl: "http://localhost:4000",
     webOrigin: "http://localhost:3000",
+    adminOrigin: "http://localhost:3001",
     // No local Supabase — local dev shares the dev/test project.
     supabaseUrl: "https://vicerfokousxmbrytdhm.supabase.co",
   },
   dev: {
     apiUrl: "https://imlipos-menu-management-test.onrender.com",
     webOrigin: "https://imlipos-menu-management-test.vercel.app",
+    adminOrigin: "https://imlipos-admin-test.vercel.app",
     supabaseUrl: "https://vicerfokousxmbrytdhm.supabase.co",
   },
   prod: {
     apiUrl: "https://imlipos-menu-management.onrender.com",
     webOrigin: "https://imlipos-menu-management-web.vercel.app",
+    adminOrigin: "https://imlipos-admin.vercel.app",
     supabaseUrl: "https://jrxbgyjsabenvxstfpmw.supabase.co",
   },
 };

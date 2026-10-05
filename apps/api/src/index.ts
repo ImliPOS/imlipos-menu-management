@@ -9,6 +9,7 @@ import { itemsRouter } from "./routes/items.js";
 import { screensRouter } from "./routes/screens.js";
 import { devicesRouter } from "./routes/devices.js";
 import { mediaRouter } from "./routes/media.js";
+import { adminRouter } from "./routes/admin.js";
 import { billingRouter, billingWebhookRouter } from "./routes/billing.js";
 
 const app = express();
@@ -35,6 +36,7 @@ app.use("/items", itemsRouter);
 app.use("/screens", screensRouter);
 app.use("/devices", devicesRouter);
 app.use("/media", mediaRouter);
+app.use("/admin", adminRouter);
 app.use("/billing", billingRouter);
 
 // Centralised error guard.
