@@ -1,6 +1,6 @@
 {
-  "id": "5895d925-3ce3-4d15-8182-462b374a8c11",
-  "prevId": "b9bff32a-3e8f-4dd2-ae74-80f730f3c4a7",
+  "id": "91241717-ad3d-40a0-a883-009e42dfd278",
+  "prevId": "193097c0-dd04-4f57-9ced-7d5bc56fe14e",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -144,6 +144,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "rotation": {
+          "name": "rotation",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "hardware_id": {
           "name": "hardware_id",
           "type": "text",
@@ -188,12 +194,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "rotation": {
-          "name": "rotation",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -280,7 +280,7 @@
           "name": "category_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "name": {
           "name": "name",
@@ -751,6 +751,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'INR'"
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
         },
         "status": {
           "name": "status",

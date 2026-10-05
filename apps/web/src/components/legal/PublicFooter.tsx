@@ -1,9 +1,10 @@
 import Link from "next/link";
 
-const LINKS = [
-  { href: "/terms", label: "Terms" },
+/** The policy pages every public/billing surface must link to. */
+export const POLICY_LINKS = [
+  { href: "/terms", label: "Terms & Conditions" },
   { href: "/refunds", label: "Refund Policy" },
-  { href: "/privacy", label: "Privacy" },
+  { href: "/privacy", label: "Privacy Policy" },
   { href: "/contact", label: "Contact" },
 ];
 
@@ -18,7 +19,7 @@ export function PublicFooter({ newTab = false }: { newTab?: boolean }) {
       <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-x-6 gap-y-2 text-xs text-muted-foreground">
         <span>© {new Date().getFullYear()} ImliPos</span>
         <nav className="flex flex-wrap gap-x-5 gap-y-2">
-          {LINKS.map(({ href, label }) => (
+          {POLICY_LINKS.map(({ href, label }) => (
             <Link
               key={href}
               href={href}

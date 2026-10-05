@@ -54,7 +54,8 @@ export const screenContentSchema = z.object({
   screen: screenSchema,
   categories: z.array(
     z.object({
-      id: z.string().uuid(),
+      /** Category uuid, or UNCATEGORIZED_ID for the virtual group. */
+      id: z.string(),
       name: z.string(),
       sortOrder: z.number().int(),
       isAvailable: z.boolean(),

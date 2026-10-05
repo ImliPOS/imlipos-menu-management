@@ -1,6 +1,6 @@
 {
-  "id": "b9bff32a-3e8f-4dd2-ae74-80f730f3c4a7",
-  "prevId": "d1a0e9ef-ae4a-4990-ab67-73fd80a39cc7",
+  "id": "193097c0-dd04-4f57-9ced-7d5bc56fe14e",
+  "prevId": "8864315e-b118-433d-b062-d1b6a7c79ed7",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -144,6 +144,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "rotation": {
+          "name": "rotation",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "hardware_id": {
           "name": "hardware_id",
           "type": "text",
@@ -188,12 +194,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "rotation": {
-          "name": "rotation",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -280,7 +280,7 @@
           "name": "category_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "name": {
           "name": "name",
@@ -964,22 +964,6 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "subscriptions_shop_live_uq": {
-          "name": "subscriptions_shop_live_uq",
-          "columns": [
-            {
-              "expression": "shop_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "status IN ('trialing', 'active')",
           "concurrently": false,
           "method": "btree",
           "with": {}

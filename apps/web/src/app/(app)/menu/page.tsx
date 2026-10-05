@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ImageIcon, Pencil, PlusIcon, Search, Star, Trash2Icon, UploadCloud, X } from "lucide-react";
 import type { Category, Item } from "@imlipos/contracts";
+import { UNCATEGORIZED_ID, UNCATEGORIZED_LABEL } from "@imlipos/contracts";
 import { api, uploadMedia } from "@/lib/api";
 import { PageSpinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,14 @@ import {
 const field =
   "h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring";
 
+/** Stand-in heading for the items that belong to no category. Listed last, the
+ *  same place a display renders them. */
+const LOOSE_GROUP = {
+  id: UNCATEGORIZED_ID,
+  name: UNCATEGORIZED_LABEL,
+  isAvailable: true,
+};
+
 export default function Menu() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<Item[]>([]);
@@ -35,11 +44,20 @@ export default function Menu() {
     const matches = (i: Item) =>
       q === "" ||
       i.name.toLowerCase().includes(q) ||
-      (catName.get(i.categoryId) ?? "").includes(q);
+      (i.categoryId === null
+        ? UNCATEGORIZED_LABEL.toLowerCase()
+        : (catName.get(i.categoryId) ?? "")
+      ).includes(q);
 
-    return categories
+    const byCategory = categories
       .map((cat) => ({ cat, catItems: items.filter((i) => i.categoryId === cat.id && matches(i)) }))
       .filter(({ catItems }) => catItems.length > 0);
+
+    // Items with no category come last, under their own heading.
+    const loose = items.filter((i) => i.categoryId === null && matches(i));
+    return loose.length > 0
+      ? [...byCategory, { cat: LOOSE_GROUP, catItems: loose }]
+      : byCategory;
   }, [categories, items, query]);
 
   useEffect(() => {
@@ -72,19 +90,6 @@ export default function Menu() {
   }
 
   if (loading) return <PageSpinner />;
-
-  if (categories.length === 0)
-    return (
-      <div className="mx-auto max-w-4xl p-4 sm:p-6 lg:p-8">
-        <p className="text-muted-foreground">
-          No categories yet. Create some under{" "}
-          <Link href="/categories" className="text-foreground underline">
-            Category
-          </Link>{" "}
-          first, then add items here.
-        </p>
-      </div>
-    );
 
   return (
     <div className="mx-auto max-w-4xl p-4 sm:p-6 lg:p-8">
@@ -124,6 +129,17 @@ export default function Menu() {
           }
         />
       </div>
+
+      {categories.length === 0 && (
+        <p className="mb-6 text-sm text-muted-foreground">
+          No categories yet — items you add land under “{UNCATEGORIZED_LABEL}”. Create
+          categories under{" "}
+          <Link href="/categories" className="text-foreground underline">
+            Category
+          </Link>{" "}
+          to group them.
+        </p>
+      )}
 
       {groups.map(({ cat, catItems }) => (
           <section key={cat.id} className="mb-8">
@@ -259,7 +275,9 @@ function ItemDialog({
     if (next) {
       setName(item?.name ?? "");
       setPrice(item ? String(item.price) : "");
-      setCategoryId(item?.categoryId ?? firstCat);
+      // "" = no category. An existing item keeps whatever it has (null → none);
+      // a new one defaults to the first category, or none when there are none.
+      setCategoryId(item ? (item.categoryId ?? "") : firstCat);
       setMediaUrl(item?.mediaUrl ?? null);
       setFeatured(item?.isFeatured ?? false);
     }
@@ -285,7 +303,7 @@ function ItemDialog({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const p = parseFloat(price);
-    if (!name.trim() || Number.isNaN(p) || !categoryId) return;
+    if (!name.trim() || Number.isNaN(p)) return;
     setBusy(true);
     try {
       const mediaType = mediaUrl ? ("image" as const) : null;
@@ -295,13 +313,13 @@ function ItemDialog({
         ? await api.updateItem(item!.id, {
             name: name.trim(),
             price: p,
-            categoryId,
+            categoryId: categoryId || null,
             mediaUrl,
             mediaType,
             isFeatured,
           })
         : await api.createItem({
-            categoryId,
+            categoryId: categoryId || null,
             name: name.trim(),
             price: p,
             mediaUrl: mediaUrl ?? undefined,
@@ -322,7 +340,9 @@ function ItemDialog({
         <DialogHeader>
           <DialogTitle>{editing ? "Edit item" : "Add item"}</DialogTitle>
           <DialogDescription>
-            {editing ? "Update this menu item." : "Add a dish or drink to a category."}
+            {editing
+              ? "Update this menu item."
+              : "Add a dish or drink. Pick a category, or leave it uncategorised."}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="mt-2 space-y-4">
@@ -396,12 +416,17 @@ function ItemDialog({
           </div>
           <div className="space-y-2">
             <Label htmlFor="item-category">Category</Label>
+            <p className="text-xs text-muted-foreground">
+              “None” keeps the item out of every category. On a display it shows
+              after the last category, with no heading — just a blank line above it.
+            </p>
             <select
               id="item-category"
               className={field}
               value={categoryId}
               onChange={(e) => setCategoryId(e.target.value)}
             >
+              <option value="">None</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}

@@ -7,11 +7,14 @@ import type {
   Plan,
   SubscriptionOrder,
 } from "@imlipos/contracts";
-import { BadgeCheck, CircleAlert, MonitorSmartphone } from "lucide-react";
+import { licenceEnforcedFor, MAX_LICENCE_QUANTITY } from "@imlipos/contracts";
+import { BadgeCheck, CircleAlert, Minus, MonitorSmartphone, Plus } from "lucide-react";
 import { api } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageSpinner, Spinner } from "@/components/ui/spinner";
+import { MockPayment } from "./MockPayment";
 
 type View =
   | { step: "overview" }
@@ -24,6 +27,16 @@ function priceLabel(plan: Plan) {
   return plan.priceMonthly == null || plan.priceMonthly === 0
     ? "Free"
     : `₹${plan.priceMonthly.toLocaleString("en-IN")}/yr`;
+}
+
+/** Order total for `quantity` licences of `plan`. */
+function totalLabel(plan: Plan, quantity: number) {
+  const unit = plan.priceMonthly ?? 0;
+  return unit === 0 ? "Free" : `₹${(unit * quantity).toLocaleString("en-IN")}`;
+}
+
+function licencesLabel(n: number) {
+  return `${n} display licence${n === 1 ? "" : "s"}`;
 }
 
 function formatDate(value: string | null) {
@@ -52,6 +65,19 @@ export function BillingSection() {
   const [orders, setOrders] = useState<SubscriptionOrder[]>([]);
   const [view, setView] = useState<View>({ step: "overview" });
   const [busy, setBusy] = useState(false);
+  // How many licences the current checkout is for (chosen on the confirm step).
+  const [quantity, setQuantity] = useState(1);
+  // null until the session is read; only the demo account sees the mock
+  // checkout screen.
+  const [demoCheckout, setDemoCheckout] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      // Same account the API enforces licences for; it alone sees the
+      // simulated checkout. Everyone else activates at once with no payment UI.
+      setDemoCheckout(licenceEnforcedFor(data.user?.email));
+    });
+  }, []);
 
   const load = useCallback(() => {
     return Promise.all([
@@ -71,20 +97,37 @@ export function BillingSection() {
     load();
   }, [load]);
 
-  if (!summary || !plan) return <PageSpinner />;
+  if (!summary || demoCheckout === null) return <PageSpinner />;
+  if (!plan) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col space-y-1">
+          <h3 className="font-semibold">Billing</h3>
+          <p className="text-sm text-muted-foreground">
+            No display licence plans are available right now. Please check
+            back later or contact support.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   async function startCheckout() {
     if (!plan) return;
     setBusy(true);
     try {
-      const { order, next } = await api.checkout(plan.id);
+      const { order, next } = await api.checkout(plan.id, quantity);
       if (next.kind === "complete") {
         await load();
         setView({ step: "success" });
       } else if (next.kind === "redirect") {
         window.location.assign(next.url);
+      } else if (next.kind === "mock" && !demoCheckout) {
+        // No gateway yet: activate the licence at once for regular accounts.
+        await completeMockPayment(order.id);
       } else {
-        // "mock" today; a gateway SDK popup ("client") plugs in here later.
+        // Demo account sees the simulated checkout; a gateway SDK popup
+        // ("client") plugs in here later.
         setView({ step: "paying", next, orderId: order.id });
       }
     } catch (err) {
@@ -124,20 +167,65 @@ export function BillingSection() {
     return (
       <div className="space-y-6">
         <div className="flex flex-col space-y-1">
-          <h3 className="font-semibold">Buy a display licence</h3>
+          <h3 className="font-semibold">Buy display licences</h3>
           <p className="text-sm text-muted-foreground">
-            Review your order before continuing to payment.
+            {demoCheckout
+              ? "Review your order before continuing to payment."
+              : "Review your order before activating the licence."}
           </p>
         </div>
         <Card>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
-              <span className="font-medium">{plan.name} · 1 display licence</span>
-              <span className="font-semibold">{priceLabel(plan)}</span>
+              <div>
+                <p className="font-medium">{plan.name} licence</p>
+                <p className="text-sm text-muted-foreground">
+                  {priceLabel(plan)} per display
+                </p>
+              </div>
+              {/* Quantity stepper: one licence per display to run. */}
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Fewer licences"
+                  disabled={busy || quantity <= 1}
+                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                >
+                  <Minus className="size-4" />
+                </Button>
+                <span
+                  className="w-10 text-center text-lg font-semibold tabular-nums"
+                  aria-live="polite"
+                >
+                  {quantity}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="More licences"
+                  disabled={busy || quantity >= MAX_LICENCE_QUANTITY}
+                  onClick={() =>
+                    setQuantity((q) => Math.min(MAX_LICENCE_QUANTITY, q + 1))
+                  }
+                >
+                  <Plus className="size-4" />
+                </Button>
+              </div>
+            </div>
+            <div className="flex items-center justify-between border-t border-border pt-4">
+              <span className="text-sm text-muted-foreground">
+                Total · {licencesLabel(quantity)}
+              </span>
+              <span className="text-lg font-semibold tabular-nums">
+                {totalLabel(plan, quantity)}
+              </span>
             </div>
             <p className="text-sm text-muted-foreground">
-              One licence lets you pair one display. Billed yearly. To run more
-              displays, buy an additional licence for each.
+              One licence lets you pair one display. Billed yearly. Pick as many
+              licences as displays you want to run.
             </p>
           </CardContent>
         </Card>
@@ -167,7 +255,15 @@ export function BillingSection() {
             Back
           </Button>
           <Button disabled={busy} onClick={startCheckout}>
-            {busy ? <Spinner /> : "Continue to payment"}
+            {busy ? (
+              <Spinner />
+            ) : demoCheckout ? (
+              "Continue to payment"
+            ) : quantity === 1 ? (
+              "Activate licence"
+            ) : (
+              `Activate ${quantity} licences`
+            )}
           </Button>
         </div>
       </div>
@@ -180,37 +276,34 @@ export function BillingSection() {
         <div className="flex flex-col space-y-1">
           <h3 className="font-semibold">Payment</h3>
           <p className="text-sm text-muted-foreground">
-            {plan.name} · 1 display licence — {priceLabel(plan)}
+            {plan.name} · {licencesLabel(quantity)} — {totalLabel(plan, quantity)}
           </p>
         </div>
         {view.next.kind === "mock" ? (
-          <Card>
-            <CardContent className="space-y-4">
-              <p className="text-sm">
-                <span className="font-medium">Simulated payment (dev).</span> No
-                payment gateway is connected yet — this completes the order as if
-                the payment succeeded.
-              </p>
-              <Button
-                disabled={busy}
-                onClick={() => completeMockPayment(view.orderId)}
-              >
-                {busy ? <Spinner /> : "Complete mock payment"}
-              </Button>
-            </CardContent>
-          </Card>
+          // Simulated checkout: "Pay" walks through a gateway-style flow,
+          // "Skip payment" activates the licence at once. Both end in mock-pay.
+          <MockPayment
+            amountLabel={totalLabel(plan, quantity)}
+            description={`${plan.name} · ${licencesLabel(quantity)}`}
+            busy={busy}
+            onPay={() => completeMockPayment(view.orderId)}
+            onSkip={() => completeMockPayment(view.orderId)}
+            onCancel={() => setView({ step: "overview" })}
+          />
         ) : (
-          <Card>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Opening payment provider…
-              </p>
-            </CardContent>
-          </Card>
+          <>
+            <Card>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Opening payment provider…
+                </p>
+              </CardContent>
+            </Card>
+            <Button variant="ghost" onClick={() => setView({ step: "overview" })}>
+              Cancel
+            </Button>
+          </>
         )}
-        <Button variant="ghost" onClick={() => setView({ step: "overview" })}>
-          Cancel
-        </Button>
       </div>
     );
   }
@@ -220,9 +313,12 @@ export function BillingSection() {
       <div className="flex flex-col items-center gap-4 py-16 text-center">
         <BadgeCheck className="size-12 text-green-400" />
         <div>
-          <h3 className="text-lg font-semibold">Licence activated</h3>
+          <h3 className="text-lg font-semibold">
+            {quantity === 1 ? "Licence activated" : `${quantity} licences activated`}
+          </h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            You can now pair one more display. Thanks!
+            You can now pair {quantity === 1 ? "one more display" : `${quantity} more displays`}.
+            Thanks!
           </p>
         </div>
         <Button variant="outline" onClick={() => setView({ step: "overview" })}>
@@ -296,7 +392,12 @@ export function BillingSection() {
                 </>
               )}
             </div>
-            <Button onClick={() => setView({ step: "confirm" })}>
+            <Button
+              onClick={() => {
+                setQuantity(1);
+                setView({ step: "confirm" });
+              }}
+            >
               {activeCount > 0 ? "Buy another licence" : "Buy a licence"}
             </Button>
           </CardContent>
