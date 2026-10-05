@@ -80,9 +80,12 @@ export const items = pgTable(
     shopId: uuid("shop_id")
       .notNull()
       .references(() => shops.id, { onDelete: "cascade" }),
-    categoryId: uuid("category_id")
-      .notNull()
-      .references(() => categories.id, { onDelete: "cascade" }),
+    /** Nullable: an item may belong to no category at all. Those loose items
+     *  render on a display as one virtual group with no heading (see
+     *  UNCATEGORIZED_ID in @imlipos/contracts). */
+    categoryId: uuid("category_id").references(() => categories.id, {
+      onDelete: "cascade",
+    }),
     name: text("name").notNull(),
     description: text("description"),
     price: numeric("price", { precision: 10, scale: 2 }).notNull(),
@@ -252,6 +255,8 @@ export const subscriptionOrders = pgTable(
     /** Snapshot of the plan price at checkout time. */
     amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
     currency: text("currency").notNull().default("INR"),
+    /** Licences bought in this order; `amount` is the total for all of them. */
+    quantity: integer("quantity").notNull().default(1),
     status: orderStatusEnum("status").notNull().default("pending"),
     provider: text("provider").notNull(),
     providerOrderId: text("provider_order_id"),

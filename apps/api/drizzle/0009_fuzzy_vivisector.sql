@@ -1,1 +1,0 @@
-DROP INDEX IF EXISTS "subscriptions_shop_live_uq";

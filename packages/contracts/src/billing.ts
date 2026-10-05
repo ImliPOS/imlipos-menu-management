@@ -19,6 +19,8 @@ export const subscriptionOrderSchema = z.object({
   /** Price snapshot at checkout time. */
   amount: z.number().nonnegative(),
   currency: z.string(),
+  /** Licences bought in this order; `amount` is the total for all of them. */
+  quantity: z.number().int().positive(),
   status: orderStatus,
   provider: z.string(),
   providerOrderId: z.string().nullable(),
@@ -30,7 +32,27 @@ export const subscriptionOrderSchema = z.object({
 });
 export type SubscriptionOrder = z.infer<typeof subscriptionOrderSchema>;
 
-export const checkoutInputSchema = z.object({ planId: z.string().uuid() });
+/**
+ * ---- Licence enforcement scope ----
+ * Until a real payment gateway is live, licences are only enforced for the
+ * demo account used to walk payment-gateway reviewers through the purchase
+ * flow. Every other shop keeps the original process: pair displays directly,
+ * with no licence prompt and no limit. Shared by the API (which rejects a
+ * pairing at the limit) and the web app (which shows the buy prompt).
+ */
+export const LICENCE_DEMO_EMAIL = "imlimenudemo1@gmail.com";
+export function licenceEnforcedFor(email: string | null | undefined): boolean {
+  return (email ?? "").trim().toLowerCase() === LICENCE_DEMO_EMAIL;
+}
+
+/** Most licences one checkout may buy — keeps a fat-fingered stepper sane. */
+export const MAX_LICENCE_QUANTITY = 50;
+
+export const checkoutInputSchema = z.object({
+  planId: z.string().uuid(),
+  /** How many display licences to buy; defaults to 1. */
+  quantity: z.number().int().min(1).max(MAX_LICENCE_QUANTITY).default(1),
+});
 export type CheckoutInput = z.infer<typeof checkoutInputSchema>;
 
 /** What the client must do next to complete payment. */
