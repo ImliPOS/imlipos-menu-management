@@ -19,6 +19,11 @@ export interface AppUrls {
   webOrigin: string;
   /** Super-admin console origin (Vercel) — used by the API for CORS. */
   adminOrigin: string;
+  /** Extra origins the API also accepts for CORS, beyond webOrigin/adminOrigin.
+   *  Used while an environment migrates to a custom domain: the new domain is
+   *  the canonical `webOrigin`, and the platform URL it replaced stays listed
+   *  here so it keeps working. Drop the entry once the old URL is retired. */
+  extraOrigins?: string[];
   /** Supabase project URL (Auth + Storage). */
   supabaseUrl: string;
 }
@@ -33,8 +38,13 @@ const URLS: Record<AppEnv, AppUrls> = {
   },
   dev: {
     apiUrl: "https://imlipos-menu-management-test.onrender.com",
-    webOrigin: "https://imlipos-menu-management-test.vercel.app",
+    // Served from a custom domain: payment gateways (Paytm) reject *.vercel.app
+    // URLs during merchant review, so the app has to answer on imlipos.com.
+    webOrigin: "https://menu-management.imlipos.com",
     adminOrigin: "https://imlipos-admin-test.vercel.app",
+    // The Vercel URL the custom domain replaced — still allowed so existing
+    // bookmarks and test flows keep working until it's retired.
+    extraOrigins: ["https://imlipos-menu-management-test.vercel.app"],
     supabaseUrl: "https://vicerfokousxmbrytdhm.supabase.co",
   },
   prod: {
