@@ -1,5 +1,20 @@
-import { View, type ViewStyle } from "react-native";
-import { frameSpec, type DisplayFrame as DisplayFrameId } from "@imlipos/contracts";
+import { useState } from "react";
+import { View, type ImageStyle, type ViewStyle } from "react-native";
+import { Image } from "expo-image";
+import {
+  frameSpec,
+  type DisplayFrame as DisplayFrameId,
+  type FrameOrnamentId,
+} from "@imlipos/contracts";
+
+// Ornament artwork, rendered from the web's SVG masters by
+// scripts/render-frame-ornaments.mjs. White on transparent, tinted at runtime.
+const ORNAMENT_IMAGES: Record<FrameOrnamentId, number> = {
+  "floral-corner": require("../../assets/frames/floral-corner.png"),
+  "crest-corner": require("../../assets/frames/crest-corner.png"),
+  "crest-centre": require("../../assets/frames/crest-centre.png"),
+  "swirl-corner": require("../../assets/frames/swirl-corner.png"),
+};
 
 /**
  * Decorative border drawn over the whole display canvas on the panel. Cosmetic
@@ -18,6 +33,9 @@ export function DisplayFrame({
   /** Display background — used to erase border corners under diamond accents. */
   background: string;
 }) {
+  // Canvas width — edge-centre ornaments and centre-broken lines are placed
+  // from it. Measured, since the canvas may be rotated for portrait panels.
+  const [width, setWidth] = useState(0);
   if (frame === "none") return null;
   const spec = frameSpec(frame);
 
@@ -107,9 +125,65 @@ export function DisplayFrame({
     });
   });
 
+  (spec.rules ?? []).forEach((r, i) => {
+    const half = r.weight / 2;
+    const line = (key: string, style: ViewStyle) =>
+      parts.push(
+        <View
+          key={`rule-${i}-${key}`}
+          style={{ position: "absolute", backgroundColor: color, ...style }}
+        />,
+      );
+    // Left and right edges run between the corner gaps.
+    line("l", { left: r.inset - half, top: r.gap, bottom: r.gap, width: r.weight });
+    line("r", { right: r.inset - half, top: r.gap, bottom: r.gap, width: r.weight });
+    for (const v of ["top", "bottom"] as const) {
+      const edge = { [v]: r.inset - half, height: r.weight };
+      if (!r.centreGap) {
+        line(v, { ...edge, left: r.gap, right: r.gap });
+      } else if (width > 0) {
+        // Broken around the centre for an edge-centre ornament.
+        const inner = width / 2 - r.centreGap / 2;
+        line(`${v}-a`, { ...edge, left: r.gap, width: Math.max(0, inner - r.gap) });
+        line(`${v}-b`, { ...edge, right: r.gap, width: Math.max(0, inner - r.gap) });
+      }
+    }
+  });
+
+  (spec.ornaments ?? []).forEach((o, i) => {
+    const img = (key: string, pos: ImageStyle, flipX: boolean, flipY: boolean) => {
+      const style: ImageStyle = { position: "absolute", width: o.w, height: o.h, ...pos };
+      // Only attach `transform` when flipping (an undefined transform crashes RN).
+      const flips = [
+        ...(flipX ? [{ scaleX: -1 }] : []),
+        ...(flipY ? [{ scaleY: -1 }] : []),
+      ];
+      if (flips.length) style.transform = flips;
+      parts.push(
+        <Image
+          key={`orn-${i}-${key}`}
+          source={ORNAMENT_IMAGES[o.asset]}
+          tintColor={color}
+          contentFit="fill"
+          style={style}
+        />,
+      );
+    };
+    if (o.place === "corners") {
+      corners.forEach((k) =>
+        img(`${k.v}${k.h}`, { [k.v]: 0, [k.h]: 0 }, k.h === "right", k.v === "bottom"),
+      );
+    } else if (width > 0) {
+      const left = width / 2 - o.w / 2;
+      img("top", { top: 0, left }, false, false);
+      img("bottom", { bottom: 0, left }, false, true);
+    }
+  });
+
   return (
     <View
       pointerEvents="none"
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
       style={{
         position: "absolute",
         top: 0,

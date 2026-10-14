@@ -80,6 +80,9 @@ export const DISPLAY_FRAMES = [
   "vintage",
   "artDeco",
   "decoCorners",
+  "floralCorners",
+  "scrollCrest",
+  "swirlCorners",
 ] as const;
 export const displayFrame = z.enum(DISPLAY_FRAMES);
 export type DisplayFrame = (typeof DISPLAY_FRAMES)[number];
@@ -92,7 +95,18 @@ export const DISPLAY_FRAME_LABELS: Record<DisplayFrame, string> = {
   vintage: "Vintage border",
   artDeco: "Art deco",
   decoCorners: "Deco corners",
+  floralCorners: "Floral corners",
+  scrollCrest: "Scroll crest",
+  swirlCorners: "Swirl corners",
 };
+
+/** Frames still being trialled: only offered in the editor to the accounts in
+ *  PREVIEW_LAYOUT_EMAILS. Remove an id from here to roll it out to everyone. */
+export const PREVIEW_FRAMES: ReadonlySet<DisplayFrame> = new Set([
+  "floralCorners",
+  "scrollCrest",
+  "swirlCorners",
+]);
 
 /** ---- Logo watermark ----
  *  The shop's logo drawn once, centred behind the menu text, at an
@@ -256,10 +270,51 @@ export interface FrameBracket {
   /** Line weight in dp. */
   weight: number;
 }
+/** A straight line along each edge that stops `gap` dp short of every corner
+ *  (leaving room for a corner ornament). With `centreGap`, the top and bottom
+ *  lines also break around the horizontal centre for an edge-centre ornament. */
+export interface FrameRule {
+  /** dp from the screen edge to the line's centre. */
+  inset: number;
+  /** Line weight in dp. */
+  weight: number;
+  /** dp from each corner where the line starts/ends. */
+  gap: number;
+  /** Width in dp of the break in the top and bottom lines, centred. */
+  centreGap?: number;
+}
+
+/** Ornament artwork (SVG masters in apps/web/public/frames, rendered to PNGs in
+ *  apps/tv/assets/frames). White on transparent; tinted to the heading colour. */
+export const FRAME_ORNAMENTS = [
+  "floral-corner",
+  "crest-corner",
+  "crest-centre",
+  "swirl-corner",
+] as const;
+export type FrameOrnamentId = (typeof FRAME_ORNAMENTS)[number];
+
+/** An ornament image placed by mirroring. The artwork is drawn for the top-left
+ *  corner ("corners") or the top edge's centre ("edgeCentres"); the other
+ *  placements are flipped copies, so one drawing serves every orientation. */
+export interface FrameOrnament {
+  asset: FrameOrnamentId;
+  /** corners: all four corners. edgeCentres: centred on the top and bottom edges. */
+  place: "corners" | "edgeCentres";
+  /** Drawn size in dp (the artwork's own viewBox size). */
+  w: number;
+  h: number;
+}
+
 export interface FrameSpec {
   rects: FrameRect[];
   corners: FrameCorner[];
   brackets: FrameBracket[];
+  rules?: FrameRule[];
+  ornaments?: FrameOrnament[];
+  /** dp the menu is inset when this frame is on (default FRAME_CONTENT_INSET).
+   *  Every line and ornament stays inside this band. */
+  contentInset?: number;
 }
 
 /** When a frame is active the menu content is pulled in by this many dp on every
@@ -270,7 +325,8 @@ export const FRAME_CONTENT_INSET = 44;
 
 /** dp the menu content is inset for a given frame (0 when none). */
 export function frameContentInset(frame: DisplayFrame): number {
-  return frame === "none" ? 0 : FRAME_CONTENT_INSET;
+  if (frame === "none") return 0;
+  return frameSpec(frame).contentInset ?? FRAME_CONTENT_INSET;
 }
 
 /** A rectangle inset equally on every side (dp). */
@@ -322,6 +378,47 @@ export function frameSpec(frame: DisplayFrame): FrameSpec {
           { inset: 18, arm: 96, weight: 2 },
           { inset: 25, arm: 70, weight: 1 },
         ],
+      };
+    case "floralCorners":
+      // Fine double border with a flower-and-scroll spray tucked inside each
+      // corner. The sprays stay within the 58dp band, clear of the menu.
+      return {
+        rects: [sq(10, 2), sq(16, 1)],
+        corners: [],
+        brackets: [],
+        ornaments: [{ asset: "floral-corner", place: "corners", w: 150, h: 150 }],
+        contentInset: 58,
+      };
+    case "scrollCrest":
+      // Double line with concave notched corners, broken at the top and bottom
+      // centres by a symmetrical acanthus scroll crest.
+      return {
+        rects: [],
+        corners: [],
+        brackets: [],
+        rules: [
+          { inset: 12, weight: 2, gap: 60, centreGap: 200 },
+          { inset: 19, weight: 1.25, gap: 60, centreGap: 200 },
+        ],
+        ornaments: [
+          { asset: "crest-corner", place: "corners", w: 60, h: 60 },
+          { asset: "crest-centre", place: "edgeCentres", w: 260, h: 56 },
+        ],
+        contentInset: 58,
+      };
+    case "swirlCorners":
+      // Paired parallel lines along each edge, ending in curling vines that meet
+      // at a heart in every corner.
+      return {
+        rects: [],
+        corners: [],
+        brackets: [],
+        rules: [
+          { inset: 14, weight: 1.75, gap: 112 },
+          { inset: 21, weight: 1.75, gap: 112 },
+        ],
+        ornaments: [{ asset: "swirl-corner", place: "corners", w: 110, h: 110 }],
+        contentInset: 52,
       };
     case "none":
     default:

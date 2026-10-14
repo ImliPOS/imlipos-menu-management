@@ -29,6 +29,7 @@ import {
   ownCategoriesPerZone,
   paginateMenu,
   previewLayoutsEnabledFor,
+  PREVIEW_FRAMES,
   resolveFontScale,
   shownItemIdsForLayout,
   UNCATEGORIZED_ID,
@@ -875,7 +876,11 @@ export function LayoutEditorPanel({
                 patchTheme({ frame: e.target.value as DisplayFrameId })
               }
             >
-              {DISPLAY_FRAMES.map((f) => (
+              {/* Preview frames are offered to the trial accounts only (and
+                  stay listed if a display already uses one). */}
+              {DISPLAY_FRAMES.filter(
+                (f) => !PREVIEW_FRAMES.has(f) || showPreview || f === theme.frame,
+              ).map((f) => (
                 <option key={f} value={f}>
                   {DISPLAY_FRAME_LABELS[f]}
                 </option>
