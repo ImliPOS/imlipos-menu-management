@@ -586,7 +586,7 @@ function PagedMenu({
               <BlankHeading ms={ms} />
             ) : (
               <Text
-                style={[styles.catTitle, catTitleSize(ms), { color: theme.heading }]}
+                style={[styles.catTitle, catTitleSize(ms), headingStyle(theme)]}
                 numberOfLines={1}
                 allowFontScaling={false}
               >
@@ -623,7 +623,7 @@ function MenuCategoryRows({
           <BlankHeading ms={ms} />
         ) : (
           <Text
-            style={[styles.catTitle, catTitleSize(ms), { color: theme.heading }]}
+            style={[styles.catTitle, catTitleSize(ms), headingStyle(theme)]}
             numberOfLines={1}
             allowFontScaling={false}
           >
@@ -693,6 +693,12 @@ const catTitleSize = (ms: MenuStyle) => ({
   fontSize: ms.titleFont,
   lineHeight: ms.titleLine,
   marginBottom: ms.titleGap,
+});
+// Heading colour + alignment (centred on templates like Centre; older
+// snapshots without the field stay left-aligned).
+const headingStyle = (theme: LayoutTheme) => ({
+  color: theme.heading,
+  textAlign: theme.headingAlign === "center" ? ("center" as const) : ("left" as const),
 });
 const itemSize = (ms: MenuStyle) => ({
   fontSize: ms.itemFont,

@@ -29,6 +29,7 @@ import {
   ownCategoriesPerZone,
   paginateMenu,
   previewLayoutsEnabledFor,
+  templateHeadingAlign,
   PREVIEW_FRAMES,
   resolveFontScale,
   shownItemIdsForLayout,
@@ -149,9 +150,12 @@ export function LayoutEditorPanel({
   // layouts without a theme fall back to the original dark look.
   // Merge over the defaults so a layout saved before a colour was added (e.g.
   // the divider) backfills that key instead of leaving it undefined.
+  // Heading alignment always follows the template, so a layout saved before
+  // the field existed (e.g. an early Centre layout) picks it up on load.
   const [theme, setTheme] = useState<LayoutTheme>(() => ({
     ...DEFAULT_THEME,
     ...device.layout?.theme,
+    headingAlign: templateHeadingAlign(device.layout?.template),
   }));
   const patchTheme = (patch: Partial<LayoutTheme>) => {
     setTheme((t) => ({ ...t, ...patch }));
@@ -468,6 +472,7 @@ export function LayoutEditorPanel({
   function applyTemplate(id: string) {
     const t = LAYOUT_TEMPLATES.find((x) => x.id === id);
     if (!t) return;
+    patchTheme({ headingAlign: templateHeadingAlign(id) });
     const next: LayoutZone[] = t.zones.map((z, i) => ({
       id: `z${i}`,
       ...z,
@@ -1792,6 +1797,7 @@ function PreviewCategoryTitle({
         // The font's heading weight, matching the TV's bundled heading face
         // (e.g. Roboto_900Black).
         color: theme.heading,
+        textAlign: theme.headingAlign === "center" ? "center" : "left",
         fontWeight: menuFontDef(ms.font).headingWeight,
         fontSize: ms.titleFont * scale,
         lineHeight: `${ms.titleLine * scale}px`,

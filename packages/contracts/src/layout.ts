@@ -207,6 +207,10 @@ export const layoutTheme = z.object({
    *  carrying a font this build doesn't know still parses — menuFontDef()
    *  resolves it to Roboto. */
   font: z.string().default(DEFAULT_MENU_FONT),
+  /** Category-heading alignment. Not chosen directly: the editor sets it from
+   *  the template (templateHeadingAlign) — e.g. "center" for the Centre layout,
+   *  whose single centred column reads best with centred headings. */
+  headingAlign: z.enum(["left", "center"]).default("left"),
 });
 export type LayoutTheme = z.infer<typeof layoutTheme>;
 
@@ -221,6 +225,7 @@ export const DEFAULT_THEME: LayoutTheme = {
   dividerEnabled: true,
   frame: "none",
   font: DEFAULT_MENU_FONT,
+  headingAlign: "left",
 };
 
 /** ---- Frame geometry (platform-neutral) ----
@@ -554,6 +559,13 @@ export interface LayoutTemplate {
   /** Still being trialled: only offered to the accounts in
    *  PREVIEW_LAYOUT_EMAILS. Drop the flag to roll it out to everyone. */
   preview?: boolean;
+  /** Category-heading alignment this template wants (default "left"). */
+  headingAlign?: "left" | "center";
+}
+
+/** The heading alignment a template implies (left for unknown/custom ids). */
+export function templateHeadingAlign(templateId: string | null | undefined): "left" | "center" {
+  return LAYOUT_TEMPLATES.find((t) => t.id === templateId)?.headingAlign ?? "left";
 }
 
 /** Accounts that see preview templates in the layout editor, so a new layout
@@ -753,6 +765,7 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
     orientation: "landscape",
     zones: [{ x: 30, y: 0, w: 40, h: 100, type: "menu" }],
     preview: true,
+    headingAlign: "center",
   },
   // Portrait
   {
@@ -845,6 +858,7 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
     orientation: "portrait",
     zones: [{ x: 20, y: 0, w: 60, h: 100, type: "menu" }],
     preview: true,
+    headingAlign: "center",
   },
 ];
 
