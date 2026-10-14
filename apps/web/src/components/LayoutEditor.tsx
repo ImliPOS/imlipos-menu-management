@@ -23,6 +23,7 @@ import {
   watermarkEligible,
   MENU_SCALE_DEFAULT,
   MENU_SCALE_MAX,
+  MENU_SCALE_MAX_STANDARD,
   MENU_SCALE_MIN,
   MENU_SCALE_STEP,
   menuStyle,
@@ -112,16 +113,27 @@ export function LayoutEditorPanel({
     const z = device.layout?.zones ?? [];
     return initialAutoFlow ? ownCategoriesPerZone(z) : z;
   });
+  // Preview features (templates, fonts, frames, the 200% font cap) are only offered to the trial accounts (see
+  // previewLayoutsEnabledFor) until they're rolled out to everyone.
+  const [showPreview, setShowPreview] = useState(false);
+  useEffect(() => {
+    supabase.auth
+      .getUser()
+      .then(({ data }) => setShowPreview(previewLayoutsEnabledFor(data.user?.email)))
+      .catch(() => setShowPreview(false));
+  }, []);
   // Continuous font scale (1 = original). Legacy preset strings on existing
   // layouts are normalised to a number so the +/- control starts in the right
   // place.
   const [fontScale, setFontScale] = useState<number>(() =>
     resolveFontScale(device.layout?.fontSize ?? MENU_SCALE_DEFAULT),
   );
+  // Up to 200% for preview accounts; everyone else keeps the original 100% cap.
+  const scaleMax = showPreview ? MENU_SCALE_MAX : MENU_SCALE_MAX_STANDARD;
   const adjustFont = (delta: number) => {
     setFontScale((v) =>
       Math.min(
-        MENU_SCALE_MAX,
+        scaleMax,
         Math.max(MENU_SCALE_MIN, Math.round((v + delta) * 100) / 100),
       ),
     );
@@ -130,7 +142,7 @@ export function LayoutEditorPanel({
   // Editable percentage field (kept in sync with fontScale; committed on
   // blur/Enter, clamped to [MIN, MAX]).
   const PCT_MIN = Math.round(MENU_SCALE_MIN * 100);
-  const PCT_MAX = Math.round(MENU_SCALE_MAX * 100);
+  const PCT_MAX = Math.round(scaleMax * 100);
   const [pctText, setPctText] = useState(String(Math.round(fontScale * 100)));
   useEffect(() => {
     setPctText(String(Math.round(fontScale * 100)));
@@ -213,15 +225,6 @@ export function LayoutEditorPanel({
         Math.min(device.resolution.width, device.resolution.height)
       : 16 / 9;
   const aspect = orientation === "portrait" ? 1 / ratio : ratio;
-  // Preview templates are only offered to the trial accounts (see
-  // previewLayoutsEnabledFor) until they're rolled out to everyone.
-  const [showPreview, setShowPreview] = useState(false);
-  useEffect(() => {
-    supabase.auth
-      .getUser()
-      .then(({ data }) => setShowPreview(previewLayoutsEnabledFor(data.user?.email)))
-      .catch(() => setShowPreview(false));
-  }, []);
   const templates = useMemo(
     () =>
       LAYOUT_TEMPLATES.filter(
@@ -738,7 +741,7 @@ export function LayoutEditorPanel({
               type="button"
               aria-label="Increase menu font size"
               onClick={() => adjustFont(MENU_SCALE_STEP)}
-              disabled={fontScale >= MENU_SCALE_MAX - 1e-9}
+              disabled={fontScale >= scaleMax - 1e-9}
               className="flex h-9 w-9 items-center justify-center rounded-md border border-input bg-background text-lg leading-none hover:bg-secondary/60 disabled:cursor-not-allowed disabled:opacity-40"
             >
               +
