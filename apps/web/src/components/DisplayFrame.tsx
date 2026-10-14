@@ -1,5 +1,21 @@
-import { Fragment } from "react";
-import { frameSpec, type DisplayFrame } from "@imlipos/contracts";
+import { Fragment, type CSSProperties } from "react";
+import { frameSpec, type DisplayFrame, type FrameOrnamentId } from "@imlipos/contracts";
+
+/** Ornament artwork drawn in the frame colour: the white-on-transparent SVG
+ *  (public/frames — the same masters the TV's PNGs are rendered from) is used
+ *  as a mask over a solid colour fill. */
+function ornamentStyle(asset: FrameOrnamentId, color: string): CSSProperties {
+  const url = `url(/frames/${asset}.svg)`;
+  return {
+    backgroundColor: color,
+    maskImage: url,
+    WebkitMaskImage: url,
+    maskSize: "100% 100%",
+    WebkitMaskSize: "100% 100%",
+    maskRepeat: "no-repeat",
+    WebkitMaskRepeat: "no-repeat",
+  };
+}
 
 /**
  * Decorative border drawn over the whole preview canvas. Purely cosmetic and
@@ -113,6 +129,74 @@ export function DisplayFrame({
                 />
               </Fragment>
             ))}
+          </Fragment>
+        );
+      })}
+
+      {(spec.rules ?? []).map((r, i) => {
+        const w = u(r.weight);
+        const at = u(r.inset) - w / 2;
+        const gap = u(r.gap);
+        const line = (key: string, style: CSSProperties) => (
+          <div key={key} className="absolute" style={{ backgroundColor: color, ...style }} />
+        );
+        const half = r.centreGap ? u(r.centreGap) / 2 : 0;
+        return (
+          <Fragment key={`rule-${i}`}>
+            {line("l", { left: at, top: gap, bottom: gap, width: w })}
+            {line("r", { right: at, top: gap, bottom: gap, width: w })}
+            {(["top", "bottom"] as const).map((v) =>
+              r.centreGap ? (
+                <Fragment key={v}>
+                  {/* Broken around the centre for an edge-centre ornament. */}
+                  {line(`${v}-a`, { [v]: at, height: w, left: gap, right: `calc(50% + ${half}px)` })}
+                  {line(`${v}-b`, { [v]: at, height: w, right: gap, left: `calc(50% + ${half}px)` })}
+                </Fragment>
+              ) : (
+                line(v, { [v]: at, height: w, left: gap, right: gap })
+              ),
+            )}
+          </Fragment>
+        );
+      })}
+
+      {(spec.ornaments ?? []).map((o, i) => {
+        const w = u(o.w);
+        const h = u(o.h);
+        const art = ornamentStyle(o.asset, color);
+        const flip = (x: boolean, y: boolean) =>
+          x || y ? `scale(${x ? -1 : 1}, ${y ? -1 : 1})` : undefined;
+        return (
+          <Fragment key={`orn-${i}`}>
+            {o.place === "corners"
+              ? corners.map((k) => (
+                  <div
+                    key={`${k.v}${k.h}`}
+                    className="absolute"
+                    style={{
+                      ...art,
+                      [k.v]: 0,
+                      [k.h]: 0,
+                      width: w,
+                      height: h,
+                      transform: flip(k.h === "right", k.v === "bottom"),
+                    }}
+                  />
+                ))
+              : (["top", "bottom"] as const).map((v) => (
+                  <div
+                    key={v}
+                    className="absolute"
+                    style={{
+                      ...art,
+                      [v]: 0,
+                      left: `calc(50% - ${w / 2}px)`,
+                      width: w,
+                      height: h,
+                      transform: flip(false, v === "bottom"),
+                    }}
+                  />
+                ))}
           </Fragment>
         );
       })}
