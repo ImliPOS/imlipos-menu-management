@@ -415,6 +415,16 @@ export interface LayoutTemplate {
   label: string;
   orientation: "landscape" | "portrait";
   zones: Array<{ x: number; y: number; w: number; h: number; type: ZoneType }>;
+  /** Still being trialled: only offered to the accounts in
+   *  PREVIEW_LAYOUT_EMAILS. Drop the flag to roll it out to everyone. */
+  preview?: boolean;
+}
+
+/** Accounts that see preview templates in the layout editor, so a new layout
+ *  can be tested on prod without affecting other shops. */
+export const PREVIEW_LAYOUT_EMAILS = ["imlimenudemo1@gmail.com"];
+export function previewLayoutsEnabledFor(email: string | null | undefined): boolean {
+  return PREVIEW_LAYOUT_EMAILS.includes((email ?? "").trim().toLowerCase());
 }
 
 export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
@@ -599,6 +609,15 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
       { x: 75, y: 50, w: 25, h: 50, type: "menu" },
     ],
   },
+  {
+    // A single narrow menu column centred on the screen, with empty theme
+    // background either side — a classic printed-menu look.
+    id: "centre",
+    label: "Centre",
+    orientation: "landscape",
+    zones: [{ x: 30, y: 0, w: 40, h: 100, type: "menu" }],
+    preview: true,
+  },
   // Portrait
   {
     id: "full-menu-p",
@@ -682,6 +701,14 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
       { x: 0, y: 34, w: 50, h: 66, type: "menu" },
       { x: 50, y: 34, w: 50, h: 66, type: "menu" },
     ],
+  },
+  {
+    // Portrait counterpart of "centre": one menu column centred horizontally.
+    id: "centre-p",
+    label: "Centre",
+    orientation: "portrait",
+    zones: [{ x: 20, y: 0, w: 60, h: 100, type: "menu" }],
+    preview: true,
   },
 ];
 

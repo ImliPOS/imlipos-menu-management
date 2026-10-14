@@ -36,6 +36,7 @@ import {
   menuStyle,
   ownCategoriesPerZone,
   paginateMenu,
+  previewLayoutsEnabledFor,
   resolveFontScale,
   shownItemIdsForLayout,
   UNCATEGORIZED_ID,
@@ -56,6 +57,7 @@ import {
   type ZoneType,
 } from "@imlipos/contracts";
 import { api, uploadMedia } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 import { DisplayFrame } from "@/components/DisplayFrame";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -213,9 +215,21 @@ export function LayoutEditorPanel({
         Math.min(device.resolution.width, device.resolution.height)
       : 16 / 9;
   const aspect = orientation === "portrait" ? 1 / ratio : ratio;
+  // Preview templates are only offered to the trial accounts (see
+  // previewLayoutsEnabledFor) until they're rolled out to everyone.
+  const [showPreview, setShowPreview] = useState(false);
+  useEffect(() => {
+    supabase.auth
+      .getUser()
+      .then(({ data }) => setShowPreview(previewLayoutsEnabledFor(data.user?.email)))
+      .catch(() => setShowPreview(false));
+  }, []);
   const templates = useMemo(
-    () => LAYOUT_TEMPLATES.filter((t) => t.orientation === orientation),
-    [orientation],
+    () =>
+      LAYOUT_TEMPLATES.filter(
+        (t) => t.orientation === orientation && (!t.preview || showPreview),
+      ),
+    [orientation, showPreview],
   );
 
   // The display's logical canvas width in the intended orientation, in *dp*
