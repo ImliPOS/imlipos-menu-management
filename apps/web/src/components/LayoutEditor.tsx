@@ -1,23 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Roboto } from "next/font/google";
 import { UploadCloud, X } from "lucide-react";
-
-// The TV renders the menu in the Android system font (Roboto). Render the
-// preview in the same typeface so glyph widths, truncation points and the
-// price-column positions match the real panel exactly.
-const previewFont = Roboto({
-  subsets: ["latin"],
-  weight: ["400", "500", "700", "900"],
-  display: "swap",
-});
 import {
   continuationHeadingIds,
   DEFAULT_THEME,
   DEFAULT_WATERMARK,
   flowCategoriesAcrossZones,
   LAYOUT_TEMPLATES,
+  MENU_FONTS,
+  menuFontDef,
   DISPLAY_FRAMES,
   DISPLAY_FRAME_LABELS,
   frameContentInset,
@@ -58,6 +50,7 @@ import {
 } from "@imlipos/contracts";
 import { api, uploadMedia } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
+import { menuFontFamily, robotoMenuFont } from "@/lib/menuFonts";
 import { DisplayFrame } from "@/components/DisplayFrame";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -315,22 +308,31 @@ export function LayoutEditorPanel({
     [pickCategories],
   );
 
-  // Measure rendered text widths (dp) in the same Roboto the preview and TV use,
+  // Measure rendered text widths (dp) in the same font the preview and TV use,
   // so the fit math can tell whether an item name wraps to a 2nd line. Gated on
-  // the web font being ready — before that, widths are omitted and items are
-  // treated as single-line (the original behaviour) until a recompute.
-  const [fontsReady, setFontsReady] = useState(false);
+  // the chosen web font being loaded — before that, widths are omitted and items
+  // fall back to the shared estimate until a recompute.
+  const menuFont = menuFontDef(theme.font).id;
+  const [readyFont, setReadyFont] = useState<string | null>(null);
   useEffect(() => {
     if (typeof document === "undefined" || !("fonts" in document)) {
-      setFontsReady(true);
+      setReadyFont(menuFont);
       return;
     }
     let on = true;
-    document.fonts.ready.then(() => on && setFontsReady(true));
+    const family = menuFontFamily(menuFont);
+    Promise.all([
+      document.fonts.load(`400 16px ${family}`),
+      document.fonts.load(`700 16px ${family}`),
+    ])
+      .then(() => document.fonts.ready)
+      .catch(() => undefined)
+      .then(() => on && setReadyFont(menuFont));
     return () => {
       on = false;
     };
-  }, []);
+  }, [menuFont]);
+  const fontsReady = readyFont === menuFont;
   const measureCtxRef = useRef<CanvasRenderingContext2D | null>(null);
   const measureText = useCallback(
     (text: string, fontPx: number, weight: number) => {
@@ -340,17 +342,17 @@ export function LayoutEditorPanel({
       const ctx = measureCtxRef.current;
       if (!ctx) return 0;
       // Font px == dp here, so widths come out in dp (same space as block widths).
-      ctx.font = `${weight} ${fontPx}px ${previewFont.style.fontFamily}`;
+      ctx.font = `${weight} ${fontPx}px ${menuFontFamily(menuFont)}`;
       return ctx.measureText(text).width;
     },
-    [],
+    [menuFont],
   );
 
   // Available items per category, shaped for the auto-flow distributor, each with
   // its measured name/price widths so the distributor can reserve a 2nd line for
   // names that won't fit on one.
   const catalog = useMemo(() => {
-    const ms = menuStyle(fontScale);
+    const ms = menuStyle(fontScale, menuFont);
     const m = new Map<string, FlowCatalogCategory>();
     for (const c of pickCategories) {
       if (!c.isAvailable) continue;
@@ -372,7 +374,7 @@ export function LayoutEditorPanel({
       });
     }
     return m;
-  }, [pickCategories, itemsByCat, fontScale, fontsReady, measureText]);
+  }, [pickCategories, itemsByCat, fontScale, menuFont, fontsReady, measureText]);
 
   // Reconstruct the per-display item exclusions from the saved layout once the
   // catalog is loaded: an assigned category's available items that the saved
@@ -423,10 +425,21 @@ export function LayoutEditorPanel({
       logicalHeightDp: Math.max(1, logicalHeightDp - frameInset * 2),
       logicalWidthDp: Math.max(1, logicalW - frameInset * 2),
       fontSize: fontScale,
+      font: menuFont,
       catalog,
       hiddenItemIds: displayHidden,
     });
-  }, [autoFlow, zones, catalog, logicalHeightDp, logicalW, fontScale, displayHidden, frameInset]);
+  }, [
+    autoFlow,
+    zones,
+    catalog,
+    logicalHeightDp,
+    logicalW,
+    fontScale,
+    menuFont,
+    displayHidden,
+    frameInset,
+  ]);
 
   // Category ids whose heading is suppressed per block — a category that spills
   // across blocks prints its heading only in the first block it appears in.
@@ -873,6 +886,29 @@ export function LayoutEditorPanel({
               category-heading colour. Preview updates live below.
             </p>
           </div>
+          {/* Font style is a preview feature (trial accounts only, like the
+              preview templates) until it's rolled out to everyone. */}
+          {showPreview && (
+            <div className="space-y-2">
+              <Label htmlFor="menu-font">Font style</Label>
+              <select
+                id="menu-font"
+                className={field}
+                value={menuFont}
+                onChange={(e) => patchTheme({ font: e.target.value })}
+              >
+                {MENU_FONTS.map((f) => (
+                  <option key={f.id} value={f.id} style={{ fontFamily: menuFontFamily(f.id) }}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                One typeface for category headings, item names and prices.
+                Preview updates live below.
+              </p>
+            </div>
+          )}
 
           {/* Shop-logo watermark — only when the whole display is menu blocks. */}
           <div className="space-y-2">
@@ -1019,8 +1055,12 @@ export function LayoutEditorPanel({
             <Label>Preview (click a block)</Label>
             <div
               ref={canvasRef}
-              className={`relative mt-2 w-full max-w-xl overflow-hidden rounded-lg border border-border ${previewFont.className}`}
-              style={{ aspectRatio: String(aspect), backgroundColor: theme.background }}
+              className={`relative mt-2 w-full max-w-xl overflow-hidden rounded-lg border border-border ${robotoMenuFont.className}`}
+              style={{
+                aspectRatio: String(aspect),
+                backgroundColor: theme.background,
+                fontFamily: menuFontFamily(menuFont),
+              }}
             >
               {/* Logo watermark under the menu blocks (they go transparent when
                   it's visible, so the logo shows through behind the text). */}
@@ -1554,7 +1594,7 @@ function MenuBlock({
   const ref = useRef<HTMLDivElement>(null);
   const [blockPx, setBlockPx] = useState({ w: 0, h: 0 });
   const [frame, setFrame] = useState(0);
-  const ms = useMemo(() => menuStyle(fontSize), [fontSize]);
+  const ms = useMemo(() => menuStyle(fontSize, theme.font), [fontSize, theme.font]);
 
   // Measure the block's pixel size → dp (÷ scale), minus 32dp padding each
   // side, is the content area the TV paginates against (height for how much
@@ -1744,9 +1784,10 @@ function PreviewCategoryTitle({
     <div
       className="overflow-hidden text-ellipsis whitespace-nowrap"
       style={{
-        // 900 to match the TV's bundled Roboto_900Black category heading.
+        // The font's heading weight, matching the TV's bundled heading face
+        // (e.g. Roboto_900Black).
         color: theme.heading,
-        fontWeight: 900,
+        fontWeight: menuFontDef(ms.font).headingWeight,
         fontSize: ms.titleFont * scale,
         lineHeight: `${ms.titleLine * scale}px`,
         marginBottom: ms.titleGap * scale,
