@@ -54,7 +54,10 @@ export const MENU_FONT_LABELS: Record<MenuFontSize, string> = {
  *  size). The editor exposes +/- stepping between these bounds; older layouts
  *  may still hold a preset string, which resolveFontScale() maps to a number. */
 export const MENU_SCALE_MIN = 0.2;
-export const MENU_SCALE_MAX = 1.0;
+export const MENU_SCALE_MAX = 2.0;
+/** The editor's upper bound for accounts outside the preview (the original
+ *  100% cap). Preview accounts can go up to MENU_SCALE_MAX. */
+export const MENU_SCALE_MAX_STANDARD = 1.0;
 export const MENU_SCALE_STEP = 0.05;
 export const MENU_SCALE_DEFAULT = 1;
 
@@ -64,7 +67,12 @@ export type MenuFont = MenuFontSize | number;
 
 /** Resolve any stored font value to a clamped numeric scale multiplier. */
 export function resolveFontScale(f: MenuFont = MENU_SCALE_DEFAULT): number {
-  const n = typeof f === "number" ? f : (MENU_FONT_SCALE[f] ?? MENU_SCALE_DEFAULT);
+  // Legacy presets stay capped at the original 100% (as they always rendered),
+  // so raising MENU_SCALE_MAX never enlarges an old "large"/"xlarge" layout.
+  const n =
+    typeof f === "number"
+      ? f
+      : Math.min(MENU_SCALE_MAX_STANDARD, MENU_FONT_SCALE[f] ?? MENU_SCALE_DEFAULT);
   return Math.min(MENU_SCALE_MAX, Math.max(MENU_SCALE_MIN, n));
 }
 
