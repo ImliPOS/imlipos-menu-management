@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isUncategorized, menuCategoryView } from "./menu";
+import { FONT_METRIC_CHARS, FONT_METRICS } from "./fontMetrics";
 
 /**
  * Per-device layout: the display is sliced into rectangular zones (in % of the
@@ -145,6 +146,39 @@ export function watermarkEligible(zones: Array<{ type: ZoneType }>): boolean {
 /** Per-display colour theme. `text` drives item names/prices; `heading` keeps
  *  the category-title accent separate so a light background can't hide it.
  *  Values are CSS colour strings (hex from the editor's colour pickers). */
+/** ---- Menu font style ----
+ *  One typeface per display for headings, item names and prices. Each app maps
+ *  the id to its own font files (TV: @expo-google-fonts, web: next/font) and
+ *  renders headings at `headingWeight`, items at 400 and prices at 700. Roboto
+ *  is the original look and the fallback for any unknown id, so a layout saved
+ *  with a newer font still renders on a panel that doesn't know it yet. */
+export const MENU_FONTS = [
+  { id: "roboto", label: "Roboto (default)", headingWeight: 900 },
+  { id: "playfair", label: "Playfair Display", headingWeight: 900 },
+  { id: "montserrat", label: "Montserrat", headingWeight: 900 },
+  { id: "oswald", label: "Oswald", headingWeight: 700 },
+  { id: "lora", label: "Lora", headingWeight: 700 },
+  { id: "poppins", label: "Poppins", headingWeight: 900 },
+  { id: "lato", label: "Lato", headingWeight: 900 },
+  { id: "merriweather", label: "Merriweather", headingWeight: 900 },
+  { id: "raleway", label: "Raleway", headingWeight: 900 },
+  { id: "opensans", label: "Open Sans", headingWeight: 800 },
+  { id: "nunito", label: "Nunito", headingWeight: 900 },
+  { id: "cinzel", label: "Cinzel", headingWeight: 900 },
+  { id: "josefin", label: "Josefin Sans", headingWeight: 700 },
+  { id: "barlowcondensed", label: "Barlow Condensed", headingWeight: 900 },
+  { id: "caveat", label: "Caveat (handwritten)", headingWeight: 700 },
+  { id: "rubik", label: "Rubik", headingWeight: 900 },
+] as const;
+export type MenuFontId = (typeof MENU_FONTS)[number]["id"];
+export type MenuFontDef = (typeof MENU_FONTS)[number];
+export const DEFAULT_MENU_FONT: MenuFontId = "roboto";
+
+/** The font definition for a stored id, falling back to Roboto. */
+export function menuFontDef(id: string | null | undefined): MenuFontDef {
+  return MENU_FONTS.find((f) => f.id === id) ?? MENU_FONTS[0];
+}
+
 export const layoutTheme = z.object({
   background: z.string().default("#000000"),
   text: z.string().default("#ffffff"),
@@ -155,6 +189,10 @@ export const layoutTheme = z.object({
   dividerEnabled: z.boolean().default(true),
   /** Decorative border around the whole display (drawn in `heading`). */
   frame: displayFrame.default("none"),
+  /** Menu typeface (a MENU_FONTS id). A plain string, not an enum, so a layout
+   *  carrying a font this build doesn't know still parses — menuFontDef()
+   *  resolves it to Roboto. */
+  font: z.string().default(DEFAULT_MENU_FONT),
 });
 export type LayoutTheme = z.infer<typeof layoutTheme>;
 
@@ -168,6 +206,7 @@ export const DEFAULT_THEME: LayoutTheme = {
   divider: "#52525b",
   dividerEnabled: true,
   frame: "none",
+  font: DEFAULT_MENU_FONT,
 };
 
 /** ---- Frame geometry (platform-neutral) ----
@@ -801,6 +840,8 @@ export interface MenuStyle {
   itemLine: number;
   itemPadV: number;
   catGap: number;
+  /** Menu typeface — drives the text-width estimate for name wrapping. */
+  font: MenuFontId;
   /** Total height of a category title block (line + gap below). */
   titleH: number;
   /** Total height of an item row (line + padding top & bottom). */
@@ -812,8 +853,12 @@ export interface MenuStyle {
 }
 
 /** Build the typography + metrics for a font value (scale number or legacy
- *  preset string; defaults to the original "medium" sizing). */
-export function menuStyle(size: MenuFont = MENU_SCALE_DEFAULT): MenuStyle {
+ *  preset string; defaults to the original "medium" sizing) in a typeface
+ *  (defaults to Roboto). */
+export function menuStyle(
+  size: MenuFont = MENU_SCALE_DEFAULT,
+  font?: string | null,
+): MenuStyle {
   const s = resolveFontScale(size);
   const r = (n: number) => Math.round(n * s);
   const b = BASE_MENU_STYLE;
@@ -830,6 +875,7 @@ export function menuStyle(size: MenuFont = MENU_SCALE_DEFAULT): MenuStyle {
     itemLine,
     itemPadV,
     catGap: r(b.catGap),
+    font: menuFontDef(font).id,
     titleH: titleLine + titleGap,
     itemH,
     // No extra bottom reserve: every menu block already renders with 32dp of
@@ -876,13 +922,35 @@ const ROBOTO_BOLD_FACTOR = 1.03;
  *  block's bottom (benign), under-reserving clips the last row of a page. */
 const ESTIMATE_SAFETY = 1.05;
 
-/** Estimate the rendered width (dp) of `text` at `fontPx` in Roboto. Used when
- *  a real measurement isn't available (on the TV, or in the editor before
- *  fonts load). */
-export function estimateTextWidth(text: string, fontPx: number, weight: 400 | 700 = 400): number {
+/** Generated ratio tables (see fontMetrics.ts), keyed by char per font. */
+const FONT_RATIO: Record<string, { ratios: Record<string, number>; boldFactor: number }> =
+  Object.fromEntries(
+    Object.entries(FONT_METRICS).map(([id, m]) => [
+      id,
+      {
+        boldFactor: m.boldFactor,
+        ratios: Object.fromEntries(
+          Array.from(FONT_METRIC_CHARS).map((ch, i) => [ch, m.ratios[i] ?? ROBOTO_DEFAULT_RATIO]),
+        ),
+      },
+    ]),
+  );
+
+/** Estimate the rendered width (dp) of `text` at `fontPx` in the given menu
+ *  font (Roboto by default). Used when a real measurement isn't available (on
+ *  the TV, or in the editor before fonts load). */
+export function estimateTextWidth(
+  text: string,
+  fontPx: number,
+  weight: 400 | 700 = 400,
+  font?: string | null,
+): number {
+  const custom = font ? FONT_RATIO[font] : undefined;
+  const table = custom?.ratios ?? ROBOTO_RATIO;
+  const boldFactor = custom?.boldFactor ?? ROBOTO_BOLD_FACTOR;
   let units = 0;
-  for (const ch of text) units += ROBOTO_RATIO[ch] ?? ROBOTO_DEFAULT_RATIO;
-  return units * fontPx * (weight >= 700 ? ROBOTO_BOLD_FACTOR : 1);
+  for (const ch of text) units += table[ch] ?? ROBOTO_DEFAULT_RATIO;
+  return units * fontPx * (weight >= 700 ? boldFactor : 1);
 }
 
 /** How many lines an item row takes in a block whose inner width is `innerW` dp.
@@ -894,16 +962,16 @@ export function estimateTextWidth(text: string, fontPx: number, weight: 400 | 70
 export function itemLines(
   item: { name?: string; price?: number; nameWidth?: number; priceWidth?: number },
   innerW: number,
-  m?: { itemFont: number },
+  m?: { itemFont: number; font?: string },
 ): number {
   if (innerW <= 0) return 1;
   const nameW =
     item.nameWidth ??
-    (item.name && m ? estimateTextWidth(item.name, m.itemFont, 400) * ESTIMATE_SAFETY : 0);
+    (item.name && m ? estimateTextWidth(item.name, m.itemFont, 400, m.font) * ESTIMATE_SAFETY : 0);
   if (!nameW) return 1;
   const priceW =
     item.priceWidth ??
-    (item.price != null && m ? estimateTextWidth(`₹${item.price}`, m.itemFont, 700) : 0);
+    (item.price != null && m ? estimateTextWidth(`₹${item.price}`, m.itemFont, 700, m.font) : 0);
   const nameCol = innerW - priceW - MENU_ITEM_GAP;
   if (nameCol <= 0) return 1; // degenerate: block narrower than the price
   return Math.max(1, Math.ceil(nameW / nameCol));
@@ -947,6 +1015,7 @@ export function paginateMenu(
     itemFont: number;
     catGap: number;
     safeBottom?: number;
+    font?: string;
   } = MENU_METRICS,
   /** Inner width (dp) of the block. When given, rows are sized by how many
    *  lines each name wraps to (see itemLines); when 0/absent every row is
@@ -1056,6 +1125,8 @@ export interface FlowOptions {
   logicalWidthDp: number;
   /** Per-display menu font scale (drives the same metrics as the TV). */
   fontSize?: MenuFont;
+  /** Per-display menu typeface (theme.font); affects name-wrap estimates. */
+  font?: string;
   /** Available items per category id, in display order. */
   catalog: Map<string, FlowCatalogCategory>;
   /** Item ids excluded from THIS display (the operator unticked them so they can
@@ -1185,9 +1256,9 @@ function fittingIds(
  */
 export function flowCategoriesAcrossZones(
   zones: LayoutZone[],
-  { logicalHeightDp, logicalWidthDp, fontSize, catalog, hiddenItemIds }: FlowOptions,
+  { logicalHeightDp, logicalWidthDp, fontSize, font, catalog, hiddenItemIds }: FlowOptions,
 ): LayoutZone[] {
-  const m = menuStyle(fontSize);
+  const m = menuStyle(fontSize, font);
   const excluded = hiddenItemIds ?? new Set<string>();
   const out = zones.map((z) => ({ ...z }));
   const byId = new Map(out.map((z) => [z.id, z]));
