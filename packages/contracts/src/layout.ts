@@ -571,9 +571,7 @@ export interface LayoutTemplate {
   preview?: boolean;
   /** Category-heading alignment this template wants (default "left"). */
   headingAlign?: "left" | "center";
-  /** Vertical placement of menu content this template wants (default "top").
-   *  Still being trialled: only applied for the accounts in
-   *  PREVIEW_LAYOUT_EMAILS (see templateVerticalAlign). */
+  /** Vertical placement of menu content this template wants (default "top"). */
   verticalAlign?: "top" | "center";
 }
 
@@ -582,13 +580,8 @@ export function templateHeadingAlign(templateId: string | null | undefined): "le
   return LAYOUT_TEMPLATES.find((t) => t.id === templateId)?.headingAlign ?? "left";
 }
 
-/** The vertical alignment a template implies. Preview-only for now: accounts
- *  outside PREVIEW_LAYOUT_EMAILS always get "top". */
-export function templateVerticalAlign(
-  templateId: string | null | undefined,
-  previewEnabled: boolean,
-): "top" | "center" {
-  if (!previewEnabled) return "top";
+/** The vertical alignment a template implies (top for unknown/custom ids). */
+export function templateVerticalAlign(templateId: string | null | undefined): "top" | "center" {
   return LAYOUT_TEMPLATES.find((t) => t.id === templateId)?.verticalAlign ?? "top";
 }
 
