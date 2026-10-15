@@ -23,7 +23,6 @@ import {
   watermarkEligible,
   MENU_SCALE_DEFAULT,
   MENU_SCALE_MAX,
-  MENU_SCALE_MAX_STANDARD,
   MENU_SCALE_MIN,
   MENU_SCALE_STEP,
   menuStyle,
@@ -113,7 +112,7 @@ export function LayoutEditorPanel({
     const z = device.layout?.zones ?? [];
     return initialAutoFlow ? ownCategoriesPerZone(z) : z;
   });
-  // Preview features (templates, fonts, frames, the 200% font cap) are only offered to the trial accounts (see
+  // Preview templates and frames are only offered to the trial accounts (see
   // previewLayoutsEnabledFor) until they're rolled out to everyone.
   const [showPreview, setShowPreview] = useState(false);
   useEffect(() => {
@@ -128,8 +127,7 @@ export function LayoutEditorPanel({
   const [fontScale, setFontScale] = useState<number>(() =>
     resolveFontScale(device.layout?.fontSize ?? MENU_SCALE_DEFAULT),
   );
-  // Up to 200% for preview accounts; everyone else keeps the original 100% cap.
-  const scaleMax = showPreview ? MENU_SCALE_MAX : MENU_SCALE_MAX_STANDARD;
+  const scaleMax = MENU_SCALE_MAX;
   const adjustFont = (delta: number) => {
     setFontScale((v) =>
       Math.min(
@@ -899,29 +897,25 @@ export function LayoutEditorPanel({
               category-heading colour. Preview updates live below.
             </p>
           </div>
-          {/* Font style is a preview feature (trial accounts only, like the
-              preview templates) until it's rolled out to everyone. */}
-          {showPreview && (
-            <div className="space-y-2">
-              <Label htmlFor="menu-font">Font style</Label>
-              <select
-                id="menu-font"
-                className={field}
-                value={menuFont}
-                onChange={(e) => patchTheme({ font: e.target.value })}
-              >
-                {MENU_FONTS.map((f) => (
-                  <option key={f.id} value={f.id} style={{ fontFamily: menuFontFamily(f.id) }}>
-                    {f.label}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-muted-foreground">
-                One typeface for category headings, item names and prices.
-                Preview updates live below.
-              </p>
-            </div>
-          )}
+          <div className="space-y-2">
+            <Label htmlFor="menu-font">Font style</Label>
+            <select
+              id="menu-font"
+              className={field}
+              value={menuFont}
+              onChange={(e) => patchTheme({ font: e.target.value })}
+            >
+              {MENU_FONTS.map((f) => (
+                <option key={f.id} value={f.id} style={{ fontFamily: menuFontFamily(f.id) }}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              One typeface for category headings, item names and prices.
+              Preview updates live below.
+            </p>
+          </div>
 
           {/* Shop-logo watermark — only when the whole display is menu blocks. */}
           <div className="space-y-2">

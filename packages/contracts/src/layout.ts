@@ -55,8 +55,8 @@ export const MENU_FONT_LABELS: Record<MenuFontSize, string> = {
  *  may still hold a preset string, which resolveFontScale() maps to a number. */
 export const MENU_SCALE_MIN = 0.2;
 export const MENU_SCALE_MAX = 2.0;
-/** The editor's upper bound for accounts outside the preview (the original
- *  100% cap). Preview accounts can go up to MENU_SCALE_MAX. */
+/** The original 100% cap. Legacy preset strings are still clamped to it (see
+ *  resolveFontScale); the editor itself goes up to MENU_SCALE_MAX. */
 export const MENU_SCALE_MAX_STANDARD = 1.0;
 export const MENU_SCALE_STEP = 0.05;
 export const MENU_SCALE_DEFAULT = 1;
@@ -110,11 +110,7 @@ export const DISPLAY_FRAME_LABELS: Record<DisplayFrame, string> = {
 
 /** Frames still being trialled: only offered in the editor to the accounts in
  *  PREVIEW_LAYOUT_EMAILS. Remove an id from here to roll it out to everyone. */
-export const PREVIEW_FRAMES: ReadonlySet<DisplayFrame> = new Set([
-  "floralCorners",
-  "scrollCrest",
-  "swirlCorners",
-]);
+export const PREVIEW_FRAMES: ReadonlySet<DisplayFrame> = new Set<DisplayFrame>([]);
 
 /** ---- Logo watermark ----
  *  The shop's logo drawn once, centred behind the menu text, at an
@@ -772,7 +768,6 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
     label: "Centre",
     orientation: "landscape",
     zones: [{ x: 30, y: 0, w: 40, h: 100, type: "menu" }],
-    preview: true,
     headingAlign: "center",
   },
   // Portrait
@@ -865,7 +860,6 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
     label: "Centre",
     orientation: "portrait",
     zones: [{ x: 20, y: 0, w: 60, h: 100, type: "menu" }],
-    preview: true,
     headingAlign: "center",
   },
 ];
