@@ -559,7 +559,13 @@ function PagedMenu({
 
   return (
     <View
-      style={styles.zonePad}
+      style={[
+        styles.zonePad,
+        // Centre layout: a menu shorter than the block sits mid-screen. A
+        // cycling tail fills the block (flex: 1), so this only moves menus
+        // that fit.
+        theme.verticalAlign === "center" && { justifyContent: "center" },
+      ]}
       onLayout={(e) => {
         // Content area = the zone minus its padding on each side.
         const w = e.nativeEvent.layout.width - MENU_BLOCK_PAD * 2;

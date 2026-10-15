@@ -215,6 +215,11 @@ export const layoutTheme = z.object({
    *  the template (templateHeadingAlign) — e.g. "center" for the Centre layout,
    *  whose single centred column reads best with centred headings. */
   headingAlign: z.enum(["left", "center"]).default("left"),
+  /** Vertical placement of menu content inside each menu block. Not chosen
+   *  directly: the editor sets it from the template (templateVerticalAlign) —
+   *  "center" for the Centre layout, so a short menu sits in the middle of the
+   *  screen instead of at the top. */
+  verticalAlign: z.enum(["top", "center"]).default("top"),
 });
 export type LayoutTheme = z.infer<typeof layoutTheme>;
 
@@ -230,6 +235,7 @@ export const DEFAULT_THEME: LayoutTheme = {
   frame: "none",
   font: DEFAULT_MENU_FONT,
   headingAlign: "left",
+  verticalAlign: "top",
 };
 
 /** ---- Frame geometry (platform-neutral) ----
@@ -565,11 +571,25 @@ export interface LayoutTemplate {
   preview?: boolean;
   /** Category-heading alignment this template wants (default "left"). */
   headingAlign?: "left" | "center";
+  /** Vertical placement of menu content this template wants (default "top").
+   *  Still being trialled: only applied for the accounts in
+   *  PREVIEW_LAYOUT_EMAILS (see templateVerticalAlign). */
+  verticalAlign?: "top" | "center";
 }
 
 /** The heading alignment a template implies (left for unknown/custom ids). */
 export function templateHeadingAlign(templateId: string | null | undefined): "left" | "center" {
   return LAYOUT_TEMPLATES.find((t) => t.id === templateId)?.headingAlign ?? "left";
+}
+
+/** The vertical alignment a template implies. Preview-only for now: accounts
+ *  outside PREVIEW_LAYOUT_EMAILS always get "top". */
+export function templateVerticalAlign(
+  templateId: string | null | undefined,
+  previewEnabled: boolean,
+): "top" | "center" {
+  if (!previewEnabled) return "top";
+  return LAYOUT_TEMPLATES.find((t) => t.id === templateId)?.verticalAlign ?? "top";
 }
 
 /** Accounts that see preview templates in the layout editor, so a new layout
@@ -769,6 +789,7 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
     orientation: "landscape",
     zones: [{ x: 30, y: 0, w: 40, h: 100, type: "menu" }],
     headingAlign: "center",
+    verticalAlign: "center",
   },
   // Portrait
   {
@@ -861,6 +882,7 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
     orientation: "portrait",
     zones: [{ x: 20, y: 0, w: 60, h: 100, type: "menu" }],
     headingAlign: "center",
+    verticalAlign: "center",
   },
 ];
 
