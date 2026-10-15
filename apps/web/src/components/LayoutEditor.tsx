@@ -30,6 +30,7 @@ import {
   paginateMenu,
   previewLayoutsEnabledFor,
   templateHeadingAlign,
+  templateVerticalAlign,
   PREVIEW_FRAMES,
   resolveFontScale,
   shownItemIdsForLayout,
@@ -112,13 +113,25 @@ export function LayoutEditorPanel({
     const z = device.layout?.zones ?? [];
     return initialAutoFlow ? ownCategoriesPerZone(z) : z;
   });
-  // Preview templates and frames are only offered to the trial accounts (see
-  // previewLayoutsEnabledFor) until they're rolled out to everyone.
+  // Preview templates, frames and the Centre layout's vertical centring are
+  // only offered to the trial accounts (see previewLayoutsEnabledFor) until
+  // they're rolled out to everyone.
   const [showPreview, setShowPreview] = useState(false);
   useEffect(() => {
     supabase.auth
       .getUser()
-      .then(({ data }) => setShowPreview(previewLayoutsEnabledFor(data.user?.email)))
+      .then(({ data }) => {
+        const enabled = previewLayoutsEnabledFor(data.user?.email);
+        setShowPreview(enabled);
+        // Vertical alignment follows the template, like headingAlign, so a
+        // Centre layout saved before the field existed picks it up on load.
+        // Only flags unsaved changes when the value actually moves.
+        const want = templateVerticalAlign(device.layout?.template, enabled);
+        if ((device.layout?.theme?.verticalAlign ?? "top") !== want) {
+          setTheme((t) => ({ ...t, verticalAlign: want }));
+          setSaved(false);
+        }
+      })
       .catch(() => setShowPreview(false));
   }, []);
   // Continuous font scale (1 = original). Legacy preset strings on existing
@@ -473,7 +486,10 @@ export function LayoutEditorPanel({
   function applyTemplate(id: string) {
     const t = LAYOUT_TEMPLATES.find((x) => x.id === id);
     if (!t) return;
-    patchTheme({ headingAlign: templateHeadingAlign(id) });
+    patchTheme({
+      headingAlign: templateHeadingAlign(id),
+      verticalAlign: templateVerticalAlign(id, showPreview),
+    });
     const next: LayoutZone[] = t.zones.map((z, i) => ({
       id: `z${i}`,
       ...z,
@@ -1702,7 +1718,12 @@ function MenuBlock({
     >
       <div
         className="flex h-full w-full flex-col"
-        style={{ padding: MENU_BLOCK_PAD * scale }}
+        style={{
+          padding: MENU_BLOCK_PAD * scale,
+          // "safe" keeps an overflowing menu pinned to the top (clipped at the
+          // bottom like the TV) rather than spilling off both edges.
+          justifyContent: theme.verticalAlign === "center" ? "safe center" : undefined,
+        }}
       >
         {!sliding ? (
           /* Sliding off: render every category statically in a wrapper we
