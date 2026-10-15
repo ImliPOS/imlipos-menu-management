@@ -113,25 +113,13 @@ export function LayoutEditorPanel({
     const z = device.layout?.zones ?? [];
     return initialAutoFlow ? ownCategoriesPerZone(z) : z;
   });
-  // Preview templates, frames and the Centre layout's vertical centring are
-  // only offered to the trial accounts (see previewLayoutsEnabledFor) until
-  // they're rolled out to everyone.
+  // Preview templates and frames are only offered to the trial accounts (see
+  // previewLayoutsEnabledFor) until they're rolled out to everyone.
   const [showPreview, setShowPreview] = useState(false);
   useEffect(() => {
     supabase.auth
       .getUser()
-      .then(({ data }) => {
-        const enabled = previewLayoutsEnabledFor(data.user?.email);
-        setShowPreview(enabled);
-        // Vertical alignment follows the template, like headingAlign, so a
-        // Centre layout saved before the field existed picks it up on load.
-        // Only flags unsaved changes when the value actually moves.
-        const want = templateVerticalAlign(device.layout?.template, enabled);
-        if ((device.layout?.theme?.verticalAlign ?? "top") !== want) {
-          setTheme((t) => ({ ...t, verticalAlign: want }));
-          setSaved(false);
-        }
-      })
+      .then(({ data }) => setShowPreview(previewLayoutsEnabledFor(data.user?.email)))
       .catch(() => setShowPreview(false));
   }, []);
   // Continuous font scale (1 = original). Legacy preset strings on existing
@@ -173,12 +161,14 @@ export function LayoutEditorPanel({
   // layouts without a theme fall back to the original dark look.
   // Merge over the defaults so a layout saved before a colour was added (e.g.
   // the divider) backfills that key instead of leaving it undefined.
-  // Heading alignment always follows the template, so a layout saved before
-  // the field existed (e.g. an early Centre layout) picks it up on load.
+  // Heading and vertical alignment always follow the template, so a layout
+  // saved before the fields existed (e.g. an early Centre layout) picks them up
+  // on load.
   const [theme, setTheme] = useState<LayoutTheme>(() => ({
     ...DEFAULT_THEME,
     ...device.layout?.theme,
     headingAlign: templateHeadingAlign(device.layout?.template),
+    verticalAlign: templateVerticalAlign(device.layout?.template),
   }));
   const patchTheme = (patch: Partial<LayoutTheme>) => {
     setTheme((t) => ({ ...t, ...patch }));
@@ -488,7 +478,7 @@ export function LayoutEditorPanel({
     if (!t) return;
     patchTheme({
       headingAlign: templateHeadingAlign(id),
-      verticalAlign: templateVerticalAlign(id, showPreview),
+      verticalAlign: templateVerticalAlign(id),
     });
     const next: LayoutZone[] = t.zones.map((z, i) => ({
       id: `z${i}`,
