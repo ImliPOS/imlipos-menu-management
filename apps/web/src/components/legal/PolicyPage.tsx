@@ -7,15 +7,18 @@ export function PolicyPage({
   children,
 }: {
   title: string;
-  effectiveDate: string;
+  /** Omitted on non-policy pages (e.g. About Us). */
+  effectiveDate?: string;
   children: ReactNode;
 }) {
   return (
     <article className="mx-auto w-full max-w-3xl px-6 py-12">
       <h1 className="text-3xl font-semibold">{title}</h1>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Effective date: {effectiveDate}
-      </p>
+      {effectiveDate && (
+        <p className="mt-2 text-sm text-muted-foreground">
+          Effective date: {effectiveDate}
+        </p>
+      )}
       <div className="mt-8 space-y-8">{children}</div>
     </article>
   );
