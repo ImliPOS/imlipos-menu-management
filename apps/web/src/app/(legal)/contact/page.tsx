@@ -9,6 +9,10 @@ export const metadata: Metadata = {
 const DETAILS: { label: string; value: string; href?: string }[] = [
   { label: "Business name", value: "ARCKS Technosoft Private Limited" },
   {
+    label: "Line of business",
+    value: "Software as a Service (SaaS): digital menu display software for restaurants and cafes",
+  },
+  {
     label: "Registered address",
     value:
       "2nd floor, 259, 3rd Main Rd, above SBI, opp. BMTC Bus Stop, Kumaraswamy Layout 2nd Stage, ISRO Layout, Bengaluru, Karnataka 560078",
