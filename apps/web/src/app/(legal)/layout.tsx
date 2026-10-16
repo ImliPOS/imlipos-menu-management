@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { PublicFooter } from "@/components/legal/PublicFooter";
 
 /**
- * Public legal/compliance pages (terms, refunds, privacy, contact).
+ * Public legal/compliance pages (about, terms, refunds, privacy, contact).
  * Deliberately outside the (app) group: no auth, reachable by payment-gateway
  * reviewers without an account.
  */

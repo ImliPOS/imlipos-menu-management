@@ -2,6 +2,7 @@ import Link from "next/link";
 
 /** The policy pages every public/billing surface must link to. */
 export const POLICY_LINKS = [
+  { href: "/about", label: "About Us" },
   { href: "/terms", label: "Terms & Conditions" },
   { href: "/refunds", label: "Refund Policy" },
   { href: "/privacy", label: "Privacy Policy" },
