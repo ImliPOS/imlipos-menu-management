@@ -47,13 +47,12 @@ import { DisplayFrame } from "../components/DisplayFrame";
 import { clearDeviceContent, loadDeviceContent, saveDeviceContent } from "../db/cache";
 import { store } from "../lib/storage";
 import { sizedImage } from "../lib/image";
+import { menuFamilies, useMenuFont } from "../lib/menuFonts";
 
-// Bundled menu font (loaded in App.tsx). Pinning the family — rather than
-// relying on the device's default system font, which varies and can be wider —
-// keeps every panel pixel-faithful to the editor preview (Roboto there too).
-const FONT_REGULAR = "Roboto_400Regular";
-const FONT_BOLD = "Roboto_700Bold";
-const FONT_BLACK = "Roboto_900Black";
+// Menu text always uses a bundled font (Roboto by default, or the display's
+// chosen typeface — see menuFonts.ts). Pinning the family — rather than relying
+// on the device's default system font, which varies and can be wider — keeps
+// every panel pixel-faithful to the editor preview, which renders the same font.
 
 /**
  * Renders the display's per-device zone layout. Each zone is positioned by
@@ -499,7 +498,10 @@ function PagedMenu({
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [frame, setFrame] = useState(0);
   const x = useRef(new Animated.Value(0)).current;
-  const ms = useMemo(() => menuStyle(fontSize), [fontSize]);
+  // The font that's actually loaded (Roboto until the chosen one is ready)
+  // drives both the text and the wrap estimates, so pages always fit.
+  const font = useMenuFont(theme.font);
+  const ms = useMemo(() => menuStyle(fontSize, font), [fontSize, font]);
 
   const simple = useMemo(
     () =>
@@ -584,7 +586,7 @@ function PagedMenu({
               <BlankHeading ms={ms} />
             ) : (
               <Text
-                style={[styles.catTitle, catTitleSize(ms), { color: theme.heading }]}
+                style={[styles.catTitle, catTitleSize(ms), headingStyle(theme)]}
                 numberOfLines={1}
                 allowFontScaling={false}
               >
@@ -621,7 +623,7 @@ function MenuCategoryRows({
           <BlankHeading ms={ms} />
         ) : (
           <Text
-            style={[styles.catTitle, catTitleSize(ms), { color: theme.heading }]}
+            style={[styles.catTitle, catTitleSize(ms), headingStyle(theme)]}
             numberOfLines={1}
             allowFontScaling={false}
           >
@@ -658,13 +660,21 @@ function MenuItemRows({
       {items.map((it) => (
         <View key={it.id} style={[styles.row, { paddingVertical: ms.itemPadV }]}>
           <Text
-            style={[styles.item, itemSize(ms), { color: theme.text }]}
+            style={[
+              styles.item,
+              itemSize(ms),
+              { color: theme.text, fontFamily: menuFamilies(ms.font).regular },
+            ]}
             allowFontScaling={false}
           >
             {it.name}
           </Text>
           <Text
-            style={[styles.price, itemSize(ms), { color: theme.text }]}
+            style={[
+              styles.price,
+              itemSize(ms),
+              { color: theme.text, fontFamily: menuFamilies(ms.font).bold },
+            ]}
             numberOfLines={1}
             allowFontScaling={false}
           >
@@ -679,9 +689,16 @@ function MenuItemRows({
 // Font-preset-driven sizes layered over the static colour/weight styles, so the
 // chosen menu font size scales the text exactly as the pagination metrics expect.
 const catTitleSize = (ms: MenuStyle) => ({
+  fontFamily: menuFamilies(ms.font).heading,
   fontSize: ms.titleFont,
   lineHeight: ms.titleLine,
   marginBottom: ms.titleGap,
+});
+// Heading colour + alignment (centred on templates like Centre; older
+// snapshots without the field stay left-aligned).
+const headingStyle = (theme: LayoutTheme) => ({
+  color: theme.heading,
+  textAlign: theme.headingAlign === "center" ? ("center" as const) : ("left" as const),
 });
 const itemSize = (ms: MenuStyle) => ({
   fontSize: ms.itemFont,
@@ -706,10 +723,10 @@ const styles = StyleSheet.create({
   cyclingCategory: { flex: 1 },
   // Clips the sliding item-page during the cycle transition.
   pagedViewport: { flex: 1, overflow: "hidden" },
-  // Colour + bundled font weight (the family carries the weight on Android, so
-  // fontFamily replaces fontWeight). Size, line height and gaps come from the
-  // active font preset (see catTitleSize / itemSize / the inline catGap).
-  catTitle: { color: "#ffd700", fontFamily: FONT_BLACK },
+  // Colour only. The bundled font family (which carries the weight on Android,
+  // so it replaces fontWeight), size, line height and gaps come from the active
+  // menu style (see catTitleSize / itemSize / the inline catGap).
+  catTitle: { color: "#ffd700" },
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -718,8 +735,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   // flexShrink lets a long name wrap in place instead of pushing the price off-row.
-  item: { flexShrink: 1, color: "#fff", fontFamily: FONT_REGULAR },
-  price: { flexShrink: 0, color: "#fff", fontFamily: FONT_BOLD },
+  item: { flexShrink: 1, color: "#fff" },
+  price: { flexShrink: 0, color: "#fff" },
 
   featColumn: { flex: 1, gap: 16 },
   featCard: { flex: 1, minHeight: 0, borderRadius: 16, overflow: "hidden" },

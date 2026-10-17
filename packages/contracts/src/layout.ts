@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isUncategorized, menuCategoryView } from "./menu";
+import { FONT_METRIC_CHARS, FONT_METRICS } from "./fontMetrics";
 
 /**
  * Per-device layout: the display is sliced into rectangular zones (in % of the
@@ -53,7 +54,10 @@ export const MENU_FONT_LABELS: Record<MenuFontSize, string> = {
  *  size). The editor exposes +/- stepping between these bounds; older layouts
  *  may still hold a preset string, which resolveFontScale() maps to a number. */
 export const MENU_SCALE_MIN = 0.2;
-export const MENU_SCALE_MAX = 1.0;
+export const MENU_SCALE_MAX = 2.0;
+/** The editor's upper bound for accounts outside the preview (the original
+ *  100% cap). Preview accounts can go up to MENU_SCALE_MAX. */
+export const MENU_SCALE_MAX_STANDARD = 1.0;
 export const MENU_SCALE_STEP = 0.05;
 export const MENU_SCALE_DEFAULT = 1;
 
@@ -63,7 +67,12 @@ export type MenuFont = MenuFontSize | number;
 
 /** Resolve any stored font value to a clamped numeric scale multiplier. */
 export function resolveFontScale(f: MenuFont = MENU_SCALE_DEFAULT): number {
-  const n = typeof f === "number" ? f : (MENU_FONT_SCALE[f] ?? MENU_SCALE_DEFAULT);
+  // Legacy presets stay capped at the original 100% (as they always rendered),
+  // so raising MENU_SCALE_MAX never enlarges an old "large"/"xlarge" layout.
+  const n =
+    typeof f === "number"
+      ? f
+      : Math.min(MENU_SCALE_MAX_STANDARD, MENU_FONT_SCALE[f] ?? MENU_SCALE_DEFAULT);
   return Math.min(MENU_SCALE_MAX, Math.max(MENU_SCALE_MIN, n));
 }
 
@@ -79,6 +88,9 @@ export const DISPLAY_FRAMES = [
   "vintage",
   "artDeco",
   "decoCorners",
+  "floralCorners",
+  "scrollCrest",
+  "swirlCorners",
 ] as const;
 export const displayFrame = z.enum(DISPLAY_FRAMES);
 export type DisplayFrame = (typeof DISPLAY_FRAMES)[number];
@@ -91,7 +103,18 @@ export const DISPLAY_FRAME_LABELS: Record<DisplayFrame, string> = {
   vintage: "Vintage border",
   artDeco: "Art deco",
   decoCorners: "Deco corners",
+  floralCorners: "Floral corners",
+  scrollCrest: "Scroll crest",
+  swirlCorners: "Swirl corners",
 };
+
+/** Frames still being trialled: only offered in the editor to the accounts in
+ *  PREVIEW_LAYOUT_EMAILS. Remove an id from here to roll it out to everyone. */
+export const PREVIEW_FRAMES: ReadonlySet<DisplayFrame> = new Set([
+  "floralCorners",
+  "scrollCrest",
+  "swirlCorners",
+]);
 
 /** ---- Logo watermark ----
  *  The shop's logo drawn once, centred behind the menu text, at an
@@ -145,6 +168,39 @@ export function watermarkEligible(zones: Array<{ type: ZoneType }>): boolean {
 /** Per-display colour theme. `text` drives item names/prices; `heading` keeps
  *  the category-title accent separate so a light background can't hide it.
  *  Values are CSS colour strings (hex from the editor's colour pickers). */
+/** ---- Menu font style ----
+ *  One typeface per display for headings, item names and prices. Each app maps
+ *  the id to its own font files (TV: @expo-google-fonts, web: next/font) and
+ *  renders headings at `headingWeight`, items at 400 and prices at 700. Roboto
+ *  is the original look and the fallback for any unknown id, so a layout saved
+ *  with a newer font still renders on a panel that doesn't know it yet. */
+export const MENU_FONTS = [
+  { id: "roboto", label: "Roboto (default)", headingWeight: 900 },
+  { id: "playfair", label: "Playfair Display", headingWeight: 900 },
+  { id: "montserrat", label: "Montserrat", headingWeight: 900 },
+  { id: "oswald", label: "Oswald", headingWeight: 700 },
+  { id: "lora", label: "Lora", headingWeight: 700 },
+  { id: "poppins", label: "Poppins", headingWeight: 900 },
+  { id: "lato", label: "Lato", headingWeight: 900 },
+  { id: "merriweather", label: "Merriweather", headingWeight: 900 },
+  { id: "raleway", label: "Raleway", headingWeight: 900 },
+  { id: "opensans", label: "Open Sans", headingWeight: 800 },
+  { id: "nunito", label: "Nunito", headingWeight: 900 },
+  { id: "cinzel", label: "Cinzel", headingWeight: 900 },
+  { id: "josefin", label: "Josefin Sans", headingWeight: 700 },
+  { id: "barlowcondensed", label: "Barlow Condensed", headingWeight: 900 },
+  { id: "caveat", label: "Caveat (handwritten)", headingWeight: 700 },
+  { id: "rubik", label: "Rubik", headingWeight: 900 },
+] as const;
+export type MenuFontId = (typeof MENU_FONTS)[number]["id"];
+export type MenuFontDef = (typeof MENU_FONTS)[number];
+export const DEFAULT_MENU_FONT: MenuFontId = "roboto";
+
+/** The font definition for a stored id, falling back to Roboto. */
+export function menuFontDef(id: string | null | undefined): MenuFontDef {
+  return MENU_FONTS.find((f) => f.id === id) ?? MENU_FONTS[0];
+}
+
 export const layoutTheme = z.object({
   background: z.string().default("#000000"),
   text: z.string().default("#ffffff"),
@@ -155,6 +211,14 @@ export const layoutTheme = z.object({
   dividerEnabled: z.boolean().default(true),
   /** Decorative border around the whole display (drawn in `heading`). */
   frame: displayFrame.default("none"),
+  /** Menu typeface (a MENU_FONTS id). A plain string, not an enum, so a layout
+   *  carrying a font this build doesn't know still parses — menuFontDef()
+   *  resolves it to Roboto. */
+  font: z.string().default(DEFAULT_MENU_FONT),
+  /** Category-heading alignment. Not chosen directly: the editor sets it from
+   *  the template (templateHeadingAlign) — e.g. "center" for the Centre layout,
+   *  whose single centred column reads best with centred headings. */
+  headingAlign: z.enum(["left", "center"]).default("left"),
 });
 export type LayoutTheme = z.infer<typeof layoutTheme>;
 
@@ -168,6 +232,8 @@ export const DEFAULT_THEME: LayoutTheme = {
   divider: "#52525b",
   dividerEnabled: true,
   frame: "none",
+  font: DEFAULT_MENU_FONT,
+  headingAlign: "left",
 };
 
 /** ---- Frame geometry (platform-neutral) ----
@@ -217,10 +283,51 @@ export interface FrameBracket {
   /** Line weight in dp. */
   weight: number;
 }
+/** A straight line along each edge that stops `gap` dp short of every corner
+ *  (leaving room for a corner ornament). With `centreGap`, the top and bottom
+ *  lines also break around the horizontal centre for an edge-centre ornament. */
+export interface FrameRule {
+  /** dp from the screen edge to the line's centre. */
+  inset: number;
+  /** Line weight in dp. */
+  weight: number;
+  /** dp from each corner where the line starts/ends. */
+  gap: number;
+  /** Width in dp of the break in the top and bottom lines, centred. */
+  centreGap?: number;
+}
+
+/** Ornament artwork (SVG masters in apps/web/public/frames, rendered to PNGs in
+ *  apps/tv/assets/frames). White on transparent; tinted to the heading colour. */
+export const FRAME_ORNAMENTS = [
+  "floral-corner",
+  "crest-corner",
+  "crest-centre",
+  "swirl-corner",
+] as const;
+export type FrameOrnamentId = (typeof FRAME_ORNAMENTS)[number];
+
+/** An ornament image placed by mirroring. The artwork is drawn for the top-left
+ *  corner ("corners") or the top edge's centre ("edgeCentres"); the other
+ *  placements are flipped copies, so one drawing serves every orientation. */
+export interface FrameOrnament {
+  asset: FrameOrnamentId;
+  /** corners: all four corners. edgeCentres: centred on the top and bottom edges. */
+  place: "corners" | "edgeCentres";
+  /** Drawn size in dp (the artwork's own viewBox size). */
+  w: number;
+  h: number;
+}
+
 export interface FrameSpec {
   rects: FrameRect[];
   corners: FrameCorner[];
   brackets: FrameBracket[];
+  rules?: FrameRule[];
+  ornaments?: FrameOrnament[];
+  /** dp the menu is inset when this frame is on (default FRAME_CONTENT_INSET).
+   *  Every line and ornament stays inside this band. */
+  contentInset?: number;
 }
 
 /** When a frame is active the menu content is pulled in by this many dp on every
@@ -231,7 +338,8 @@ export const FRAME_CONTENT_INSET = 44;
 
 /** dp the menu content is inset for a given frame (0 when none). */
 export function frameContentInset(frame: DisplayFrame): number {
-  return frame === "none" ? 0 : FRAME_CONTENT_INSET;
+  if (frame === "none") return 0;
+  return frameSpec(frame).contentInset ?? FRAME_CONTENT_INSET;
 }
 
 /** A rectangle inset equally on every side (dp). */
@@ -283,6 +391,47 @@ export function frameSpec(frame: DisplayFrame): FrameSpec {
           { inset: 18, arm: 96, weight: 2 },
           { inset: 25, arm: 70, weight: 1 },
         ],
+      };
+    case "floralCorners":
+      // Fine double border with a flower-and-scroll spray tucked inside each
+      // corner. The sprays stay within the 58dp band, clear of the menu.
+      return {
+        rects: [sq(10, 2), sq(16, 1)],
+        corners: [],
+        brackets: [],
+        ornaments: [{ asset: "floral-corner", place: "corners", w: 150, h: 150 }],
+        contentInset: 58,
+      };
+    case "scrollCrest":
+      // Double line with concave notched corners, broken at the top and bottom
+      // centres by a symmetrical acanthus scroll crest.
+      return {
+        rects: [],
+        corners: [],
+        brackets: [],
+        rules: [
+          { inset: 12, weight: 2, gap: 60, centreGap: 200 },
+          { inset: 19, weight: 1.25, gap: 60, centreGap: 200 },
+        ],
+        ornaments: [
+          { asset: "crest-corner", place: "corners", w: 60, h: 60 },
+          { asset: "crest-centre", place: "edgeCentres", w: 260, h: 56 },
+        ],
+        contentInset: 58,
+      };
+    case "swirlCorners":
+      // Paired parallel lines along each edge, ending in curling vines that meet
+      // at a heart in every corner.
+      return {
+        rects: [],
+        corners: [],
+        brackets: [],
+        rules: [
+          { inset: 14, weight: 1.75, gap: 112 },
+          { inset: 21, weight: 1.75, gap: 112 },
+        ],
+        ornaments: [{ asset: "swirl-corner", place: "corners", w: 110, h: 110 }],
+        contentInset: 52,
       };
     case "none":
     default:
@@ -415,6 +564,23 @@ export interface LayoutTemplate {
   label: string;
   orientation: "landscape" | "portrait";
   zones: Array<{ x: number; y: number; w: number; h: number; type: ZoneType }>;
+  /** Still being trialled: only offered to the accounts in
+   *  PREVIEW_LAYOUT_EMAILS. Drop the flag to roll it out to everyone. */
+  preview?: boolean;
+  /** Category-heading alignment this template wants (default "left"). */
+  headingAlign?: "left" | "center";
+}
+
+/** The heading alignment a template implies (left for unknown/custom ids). */
+export function templateHeadingAlign(templateId: string | null | undefined): "left" | "center" {
+  return LAYOUT_TEMPLATES.find((t) => t.id === templateId)?.headingAlign ?? "left";
+}
+
+/** Accounts that see preview templates in the layout editor, so a new layout
+ *  can be tested on prod without affecting other shops. */
+export const PREVIEW_LAYOUT_EMAILS = ["imlimenudemo1@gmail.com"];
+export function previewLayoutsEnabledFor(email: string | null | undefined): boolean {
+  return PREVIEW_LAYOUT_EMAILS.includes((email ?? "").trim().toLowerCase());
 }
 
 export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
@@ -599,6 +765,16 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
       { x: 75, y: 50, w: 25, h: 50, type: "menu" },
     ],
   },
+  {
+    // A single narrow menu column centred on the screen, with empty theme
+    // background either side — a classic printed-menu look.
+    id: "centre",
+    label: "Centre",
+    orientation: "landscape",
+    zones: [{ x: 30, y: 0, w: 40, h: 100, type: "menu" }],
+    preview: true,
+    headingAlign: "center",
+  },
   // Portrait
   {
     id: "full-menu-p",
@@ -682,6 +858,15 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
       { x: 0, y: 34, w: 50, h: 66, type: "menu" },
       { x: 50, y: 34, w: 50, h: 66, type: "menu" },
     ],
+  },
+  {
+    // Portrait counterpart of "centre": one menu column centred horizontally.
+    id: "centre-p",
+    label: "Centre",
+    orientation: "portrait",
+    zones: [{ x: 20, y: 0, w: 60, h: 100, type: "menu" }],
+    preview: true,
+    headingAlign: "center",
   },
 ];
 
@@ -774,6 +959,8 @@ export interface MenuStyle {
   itemLine: number;
   itemPadV: number;
   catGap: number;
+  /** Menu typeface — drives the text-width estimate for name wrapping. */
+  font: MenuFontId;
   /** Total height of a category title block (line + gap below). */
   titleH: number;
   /** Total height of an item row (line + padding top & bottom). */
@@ -785,8 +972,12 @@ export interface MenuStyle {
 }
 
 /** Build the typography + metrics for a font value (scale number or legacy
- *  preset string; defaults to the original "medium" sizing). */
-export function menuStyle(size: MenuFont = MENU_SCALE_DEFAULT): MenuStyle {
+ *  preset string; defaults to the original "medium" sizing) in a typeface
+ *  (defaults to Roboto). */
+export function menuStyle(
+  size: MenuFont = MENU_SCALE_DEFAULT,
+  font?: string | null,
+): MenuStyle {
   const s = resolveFontScale(size);
   const r = (n: number) => Math.round(n * s);
   const b = BASE_MENU_STYLE;
@@ -803,6 +994,7 @@ export function menuStyle(size: MenuFont = MENU_SCALE_DEFAULT): MenuStyle {
     itemLine,
     itemPadV,
     catGap: r(b.catGap),
+    font: menuFontDef(font).id,
     titleH: titleLine + titleGap,
     itemH,
     // No extra bottom reserve: every menu block already renders with 32dp of
@@ -849,13 +1041,35 @@ const ROBOTO_BOLD_FACTOR = 1.03;
  *  block's bottom (benign), under-reserving clips the last row of a page. */
 const ESTIMATE_SAFETY = 1.05;
 
-/** Estimate the rendered width (dp) of `text` at `fontPx` in Roboto. Used when
- *  a real measurement isn't available (on the TV, or in the editor before
- *  fonts load). */
-export function estimateTextWidth(text: string, fontPx: number, weight: 400 | 700 = 400): number {
+/** Generated ratio tables (see fontMetrics.ts), keyed by char per font. */
+const FONT_RATIO: Record<string, { ratios: Record<string, number>; boldFactor: number }> =
+  Object.fromEntries(
+    Object.entries(FONT_METRICS).map(([id, m]) => [
+      id,
+      {
+        boldFactor: m.boldFactor,
+        ratios: Object.fromEntries(
+          Array.from(FONT_METRIC_CHARS).map((ch, i) => [ch, m.ratios[i] ?? ROBOTO_DEFAULT_RATIO]),
+        ),
+      },
+    ]),
+  );
+
+/** Estimate the rendered width (dp) of `text` at `fontPx` in the given menu
+ *  font (Roboto by default). Used when a real measurement isn't available (on
+ *  the TV, or in the editor before fonts load). */
+export function estimateTextWidth(
+  text: string,
+  fontPx: number,
+  weight: 400 | 700 = 400,
+  font?: string | null,
+): number {
+  const custom = font ? FONT_RATIO[font] : undefined;
+  const table = custom?.ratios ?? ROBOTO_RATIO;
+  const boldFactor = custom?.boldFactor ?? ROBOTO_BOLD_FACTOR;
   let units = 0;
-  for (const ch of text) units += ROBOTO_RATIO[ch] ?? ROBOTO_DEFAULT_RATIO;
-  return units * fontPx * (weight >= 700 ? ROBOTO_BOLD_FACTOR : 1);
+  for (const ch of text) units += table[ch] ?? ROBOTO_DEFAULT_RATIO;
+  return units * fontPx * (weight >= 700 ? boldFactor : 1);
 }
 
 /** How many lines an item row takes in a block whose inner width is `innerW` dp.
@@ -867,16 +1081,16 @@ export function estimateTextWidth(text: string, fontPx: number, weight: 400 | 70
 export function itemLines(
   item: { name?: string; price?: number; nameWidth?: number; priceWidth?: number },
   innerW: number,
-  m?: { itemFont: number },
+  m?: { itemFont: number; font?: string },
 ): number {
   if (innerW <= 0) return 1;
   const nameW =
     item.nameWidth ??
-    (item.name && m ? estimateTextWidth(item.name, m.itemFont, 400) * ESTIMATE_SAFETY : 0);
+    (item.name && m ? estimateTextWidth(item.name, m.itemFont, 400, m.font) * ESTIMATE_SAFETY : 0);
   if (!nameW) return 1;
   const priceW =
     item.priceWidth ??
-    (item.price != null && m ? estimateTextWidth(`₹${item.price}`, m.itemFont, 700) : 0);
+    (item.price != null && m ? estimateTextWidth(`₹${item.price}`, m.itemFont, 700, m.font) : 0);
   const nameCol = innerW - priceW - MENU_ITEM_GAP;
   if (nameCol <= 0) return 1; // degenerate: block narrower than the price
   return Math.max(1, Math.ceil(nameW / nameCol));
@@ -920,6 +1134,7 @@ export function paginateMenu(
     itemFont: number;
     catGap: number;
     safeBottom?: number;
+    font?: string;
   } = MENU_METRICS,
   /** Inner width (dp) of the block. When given, rows are sized by how many
    *  lines each name wraps to (see itemLines); when 0/absent every row is
@@ -1029,6 +1244,8 @@ export interface FlowOptions {
   logicalWidthDp: number;
   /** Per-display menu font scale (drives the same metrics as the TV). */
   fontSize?: MenuFont;
+  /** Per-display menu typeface (theme.font); affects name-wrap estimates. */
+  font?: string;
   /** Available items per category id, in display order. */
   catalog: Map<string, FlowCatalogCategory>;
   /** Item ids excluded from THIS display (the operator unticked them so they can
@@ -1158,9 +1375,9 @@ function fittingIds(
  */
 export function flowCategoriesAcrossZones(
   zones: LayoutZone[],
-  { logicalHeightDp, logicalWidthDp, fontSize, catalog, hiddenItemIds }: FlowOptions,
+  { logicalHeightDp, logicalWidthDp, fontSize, font, catalog, hiddenItemIds }: FlowOptions,
 ): LayoutZone[] {
-  const m = menuStyle(fontSize);
+  const m = menuStyle(fontSize, font);
   const excluded = hiddenItemIds ?? new Set<string>();
   const out = zones.map((z) => ({ ...z }));
   const byId = new Map(out.map((z) => [z.id, z]));
