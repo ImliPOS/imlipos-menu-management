@@ -19,6 +19,8 @@ export interface AppUrls {
   webOrigin: string;
   /** Super-admin console origin (Vercel) — used by the API for CORS. */
   adminOrigin: string;
+  /** Extra browser origins (e.g. custom domains) the API must also allow for CORS. */
+  extraOrigins?: string[];
   /** Supabase project URL (Auth + Storage). */
   supabaseUrl: string;
 }
@@ -41,6 +43,7 @@ const URLS: Record<AppEnv, AppUrls> = {
     apiUrl: "https://imlipos-menu-management.onrender.com",
     webOrigin: "https://imlipos-menu-management-web.vercel.app",
     adminOrigin: "https://imlipos-admin.vercel.app",
+    extraOrigins: ["https://menu-management.imlipos.com"],
     supabaseUrl: "https://jrxbgyjsabenvxstfpmw.supabase.co",
   },
 };
