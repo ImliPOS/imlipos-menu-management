@@ -35,9 +35,11 @@ const urls = appUrls(APP_ENV);
 export const env = {
   ...parsed,
   APP_ENV,
-  // Both browser apps (owner web + super-admin console) need CORS access; a
-  // manual WEB_ORIGIN override must therefore list both origins.
-  WEB_ORIGIN: parsed.WEB_ORIGIN ?? `${urls.webOrigin},${urls.adminOrigin}`,
+  // Both browser apps (owner web + super-admin console) plus any custom domains
+  // need CORS access; a manual WEB_ORIGIN override must therefore list them all.
+  WEB_ORIGIN:
+    parsed.WEB_ORIGIN ??
+    [urls.webOrigin, urls.adminOrigin, ...(urls.extraOrigins ?? [])].join(","),
   SUPABASE_URL: parsed.SUPABASE_URL ?? urls.supabaseUrl,
 };
 
